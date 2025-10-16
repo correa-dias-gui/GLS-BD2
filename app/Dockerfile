@@ -1,29 +1,29 @@
-# Dockerfile - básico
+# Dockerfile - aplicação C++ com logs e variáveis de ambiente
 FROM debian:bookworm-slim
 
-# Instala dependências
+# Instalar dependências
 RUN apt-get update && apt-get install -y \
     g++ \
     make \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Diretório de trabalho
+# Diretório de trabalho dentro do container
 WORKDIR /app
 
-# Copia o projeto
-COPY . /app
+# Copiar projeto inteiro
+COPY . .
 
-# Compila os binários
+# Definir variáveis de ambiente padrão
+ENV DATA_DIR=/app/data \
+    LOG_LEVEL=info \
+    CSV_PATH=/app/data/input.csv
+
+# Compilar o projeto (gera binários em /app/bin)
 RUN make build
 
-# Configura volumes
-VOLUME ["/data"]
+# Montar /app/data como volume (para persistência)
+VOLUME ["/app/data"]
 
-# Variáveis de ambiente
-ENV DATA_DIR=/data \
-    LOG_LEVEL=info \
-    CSV_PATH=/data/input.csv
-
-# Comando default
+# Comando padrão (pode mudar para ./bin/main futuramente)
 CMD ["bash"]

@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  upload:
+    build: .
+    container_name: tp2-upload
+    volumes:
+      - ./data:/app/data         # monta a pasta local ./data dentro do container
+    environment:
+      - LOG_LEVEL=info
+      - DATA_DIR=/app/data
+      - CSV_PATH=/app/data/input.csv
+    command: ["./bin/upload", "/app/data/input.csv"]
+
+  findrec:
+    build: .
+    container_name: tp2-findrec
+    volumes:
+      - ./data:/app/data
+    environment:
+      - LOG_LEVEL=info
+      - DATA_DIR=/app/data
+    command: ["./bin/findrec", "123"]    # exemplo de ID, pode trocar depois
+
+  seek1:
+    build: .
+    container_name: tp2-seek1
+    volumes:
+      - ./data:/app/data
+    environment:
+      - LOG_LEVEL=info
+      - DATA_DIR=/app/data
+    command: ["./bin/seek1", "123"]
+
+  seek2:
+    build: .
+    container_name: tp2-seek2
+    volumes:
+      - ./data:/app/data
+    environment:
+      - LOG_LEVEL=info
+      - DATA_DIR=/app/data
+    command: ["./bin/seek2", "Um Título Exato"]
