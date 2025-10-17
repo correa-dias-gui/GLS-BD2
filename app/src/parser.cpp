@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
         total++;
 
         // Exibe os 2 primeiros para verificação
-        if (total <= 2) {
+        if (total <= 3) {
             std::cout << "Lido artigo ID=" << a.id << " | Título=" << a.titulo << "\n";
         }
 
