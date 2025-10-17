@@ -1,22 +1,15 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <cmath>
 #include <cstring>
-#include <cstdio>
+#include <cstdint>
 
 using namespace std;
 
-// ================================
-// CONFIGURAÇÕES
-// ================================
 const int TAM_BLOCO = 4096;
-const int TAM_BUCKET = 500; // limite de artigos por bloco
-const int NUM_BUCKETS = 1009; // número primo para hash
+const int ARTIGOS_POR_BLOCO = 2;
+const int NUM_BUCKETS = 1009;
 
-// ================================
-// ESTRUTURAS
-// ================================
 #pragma pack(push, 1)
 struct Artigo {
     int id;
@@ -24,133 +17,109 @@ struct Artigo {
     int ano;
     char autores[151];
     int citacoes;
-    long long dataAtualizacao; // AAAAMMDD
+    char dataAtualizacao[21];
     char snippet[1025];
 };
 #pragma pack(pop)
 
 #pragma pack(push, 1)
 struct BucketInfo {
-    long offset;    // posição do primeiro bloco do bucket em data_hash.bin
-    int nBlocos;    // blocos ocupados
-    int nRegistros; // total de registros no bucket
+    int64_t offset;   // posição em bytes do início do bucket em data_hash.dat
+    int nBlocos;      // blocos efetivamente ocupados
+    int nRegistros;   // registros válidos no bucket
 };
 #pragma pack(pop)
 
-// ================================
-// FUNÇÃO DE HASH
-// ================================
 int funcaoHash(int id) {
     return id % NUM_BUCKETS;
 }
 
-// ================================
-// FUNÇÃO PRINCIPAL
-// ================================
 int main() {
-    ifstream entrada("data.bin", ios::binary);
-    if (!entrada) {
-        cerr << "Erro ao abrir data.bin\n";
-        return 1;
-    }
+    vector<Artigo> artigos;
 
-    cout << "✅ Distribuindo registros em arquivos temporários por bucket...\n";
+    // =========================
+    // 1️⃣ Lê os artigos do data.bin
+    // =========================
+    ifstream dataIn("data.bin", ios::binary);
+    if (!dataIn) { cerr << "Erro ao abrir data.bin\n"; return 1; }
 
-    // 1️⃣ Criar arquivos temporários por bucket
-    vector<ofstream> tempBuckets(NUM_BUCKETS);
-    for (int i = 0; i < NUM_BUCKETS; i++) {
-        string filename = "bucket_" + to_string(i) + ".tmp";
-        tempBuckets[i].open(filename, ios::binary);
-        if (!tempBuckets[i]) {
-            cerr << "Erro ao criar arquivo temporário " << filename << "\n";
-            return 1;
-        }
-    }
-
-    // Ler data.bin e distribuir nos buckets temporários
     Artigo a;
-    while (entrada.read(reinterpret_cast<char*>(&a), sizeof(Artigo))) {
-        int bucketId = funcaoHash(a.id);
-        tempBuckets[bucketId].write(reinterpret_cast<char*>(&a), sizeof(Artigo));
+    while (dataIn.read(reinterpret_cast<char*>(&a), sizeof(Artigo))) {
+        artigos.push_back(a);
     }
-    entrada.close();
-    for (int i = 0; i < NUM_BUCKETS; i++) tempBuckets[i].close();
+    dataIn.close();
 
-    // 2️⃣ Processar cada bucket temporário e escrever em blocos
-    ofstream dataHash("data_hash.bin", ios::binary);
-    ofstream hashTable("hash.bin", ios::binary);
-    if (!dataHash || !hashTable) {
-        cerr << "Erro ao criar arquivos finais.\n";
-        return 1;
+    if (artigos.empty()) { 
+        cerr << "Nenhum artigo encontrado em data.bin\n"; 
+        return 1; 
     }
 
-    long offsetAtual = 0;
+    // =========================
+    // 2️⃣ Inicializa hash
+    // =========================
+    vector<BucketInfo> hash(NUM_BUCKETS);
+    for (int i = 0; i < NUM_BUCKETS; ++i) {
+        hash[i].offset = 0;
+        hash[i].nBlocos = 0;
+        hash[i].nRegistros = 0;
+    }
 
-    for (int i = 0; i < NUM_BUCKETS; i++) {
-        string filename = "bucket_" + to_string(i) + ".tmp";
-        ifstream tempIn(filename, ios::binary);
-        if (!tempIn) {
-            // Bucket vazio
-            BucketInfo info = {offsetAtual, 0, 0};
-            hashTable.write(reinterpret_cast<char*>(&info), sizeof(BucketInfo));
-            continue;
-        }
+    vector<vector<Artigo>> buckets(NUM_BUCKETS);
+    for (const auto& art : artigos) {
+        int b = funcaoHash(art.id);
+        buckets[b].push_back(art);
+    }
 
-        // Contar quantos registros tem o bucket
-        tempIn.seekg(0, ios::end);
-        long sizeBytes = tempIn.tellg();
-        int totalRegs = sizeBytes / sizeof(Artigo);
-        tempIn.seekg(0, ios::beg);
+    // =========================
+    // 3️⃣ Escreve data_hash.dat e atualiza hash
+    // =========================
+    ofstream dataOut("data_hash.dat", ios::binary);
+    if (!dataOut) { cerr << "Erro ao criar data_hash.dat\n"; return 1; }
 
-        if (totalRegs == 0) {
-            BucketInfo info = {offsetAtual, 0, 0};
-            hashTable.write(reinterpret_cast<char*>(&info), sizeof(BucketInfo));
-            tempIn.close();
-            remove(filename.c_str());
-            continue;
-        }
+    int64_t offsetAtual = 0;
+    for (int i = 0; i < NUM_BUCKETS; ++i) {
+        if (buckets[i].empty()) continue;
 
-        long offsetBucket = offsetAtual;
-        int nBlocosBucket = 0;
-        int regsProcessados = 0;
+        hash[i].offset = offsetAtual;
+        hash[i].nRegistros = buckets[i].size();
+        hash[i].nBlocos = (buckets[i].size() + ARTIGOS_POR_BLOCO - 1) / ARTIGOS_POR_BLOCO;
 
-        while (regsProcessados < totalRegs) {
-            vector<char> bloco(TAM_BLOCO);
-            memset(bloco.data(), 0, TAM_BLOCO);
+        vector<char> bloco(TAM_BLOCO, 0);
+        int indiceArtigoNoBloco = 0;
 
-            int pos = 0;
-            int regsNoBloco = 0;
+        for (size_t j = 0; j < buckets[i].size(); ++j) {
+            memcpy(bloco.data() + indiceArtigoNoBloco * sizeof(Artigo),
+                   &buckets[i][j],
+                   sizeof(Artigo));
+            indiceArtigoNoBloco++;
 
-            while (regsNoBloco < TAM_BUCKET && regsProcessados < totalRegs
-                   && pos + sizeof(Artigo) <= TAM_BLOCO) {
-                Artigo art;
-                tempIn.read(reinterpret_cast<char*>(&art), sizeof(Artigo));
-                memcpy(bloco.data() + pos, &art, sizeof(Artigo));
-                pos += sizeof(Artigo);
-                regsNoBloco++;
-                regsProcessados++;
+            if (indiceArtigoNoBloco == ARTIGOS_POR_BLOCO || j == buckets[i].size() - 1) {
+                dataOut.write(bloco.data(), TAM_BLOCO);
+                offsetAtual += TAM_BLOCO;
+                bloco.assign(TAM_BLOCO, 0);
+                indiceArtigoNoBloco = 0;
             }
-
-            dataHash.write(bloco.data(), TAM_BLOCO);
-            offsetAtual += TAM_BLOCO;
-            nBlocosBucket++;
         }
-
-        BucketInfo info = {offsetBucket, nBlocosBucket, totalRegs};
-        hashTable.write(reinterpret_cast<char*>(&info), sizeof(BucketInfo));
-
-        tempIn.close();
-        remove(filename.c_str()); // Apaga arquivo temporário
     }
+    dataOut.close();
 
-    dataHash.close();
-    hashTable.close();
+    // =========================
+    // 4️⃣ Salva hash.bin
+    // =========================
+    ofstream hashOut("hash.bin", ios::binary);
+    if (!hashOut) { cerr << "Erro ao criar hash.bin\n"; return 1; }
 
-    cout << "✅ Indexação concluída com sucesso.\n";
-    cout << "📦 Arquivos gerados: data_hash.bin e hash.bin\n";
-    cout << "📘 Cada bloco armazena até " << TAM_BUCKET << " artigos.\n";
-    cout << "💾 Tamanho de bloco: " << TAM_BLOCO << " bytes.\n";
-    cout << "🔢 Buckets totais: " << NUM_BUCKETS << "\n";
+    for (int i = 0; i < NUM_BUCKETS; ++i) {
+        hashOut.write(reinterpret_cast<char*>(&hash[i]), sizeof(BucketInfo));
+    }
+    hashOut.close();
+
+    // =========================
+    // 5️⃣ Imprime total de blocos
+    // =========================
+    int64_t totalBlocos = offsetAtual / TAM_BLOCO;
+    cout << "✅ Data hash criado com sucesso!\n";
+    cout << "Total blocos usados: " << totalBlocos << "\n";
 
     return 0;
 }
