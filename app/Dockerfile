@@ -1,5 +1,5 @@
 # Dockerfile - aplicação C++ com logs e variáveis de ambiente
-FROM debian:bookworm-slim
+FROM gcc:latest
 
 # Instalar dependências
 RUN apt-get update && apt-get install -y \
