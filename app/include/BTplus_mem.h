@@ -48,6 +48,8 @@ private:
     No carregarNo(long pos);
 
     long dividirNo(long pos, No &no, const std::vector<std::pair<std::string, long>>& pares);
+    void exibirNo(long offset, int nivel);
+    long encontrarFolha(long no_offset, const void* chave);
 
 public:
     ArvoreBMais(string nome, CompareFunc cmp, SerializeFunc ser, DeserializeFunc deser);
