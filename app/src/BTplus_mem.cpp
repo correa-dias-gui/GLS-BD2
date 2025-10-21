@@ -5,13 +5,14 @@
 No::No(bool eh_folha) {
     folha = eh_folha;
     qtd_chaves = 0;
-    chaves.resize(2 * M);
-    offsets.resize(2 * M + 1, -1);
+    memset(chaves, 0, sizeof(chaves));
+    memset(offsets, -1, sizeof(offsets));
     proximo = -1;
+    memset(padding, 0, sizeof(padding)); // inicializa o padding
 }
 
-ArvoreBMais::ArvoreBMais(string nome) {
-    nome_arquivo = nome;
+ArvoreBMais::ArvoreBMais(string nome, CompareFunc cmp, SerializeFunc ser, DeserializeFunc deser)
+    : nome_arquivo(nome), compare(cmp), serialize(ser), deserialize(deser) {
     raiz_offset = -1;
     abrirArquivo();
 }
@@ -21,11 +22,11 @@ ArvoreBMais::~ArvoreBMais() {
 }
 
 void ArvoreBMais::abrirArquivo() {
-    arquivo.open(nome_arquivo, ios::in | ios::out | ios::app);
+    arquivo.open(nome_arquivo, ios::in | ios::out | ios::binary);
     if (!arquivo.is_open()) {
-        ofstream criar(nome_arquivo);
+        ofstream criar(nome_arquivo, ios::binary);
         criar.close();
-        arquivo.open(nome_arquivo, ios::in | ios::out | ios::app);
+        arquivo.open(nome_arquivo, ios::in | ios::out | ios::binary);
     }
 }
 
@@ -33,13 +34,7 @@ long ArvoreBMais::salvarNo(No &no) {
     arquivo.clear();
     arquivo.seekp(0, ios::end);
     long pos = arquivo.tellp();
-    arquivo << (no.folha ? "F" : "I") << ";"
-            << no.qtd_chaves << ";";
-    for (int i = 0; i < 2 * M; i++)
-        arquivo << no.chaves[i] << ";";
-    for (int i = 0; i < 2 * M + 1; i++)
-        arquivo << no.offsets[i] << ";";
-    arquivo << no.proximo << "\n";
+    arquivo.write(reinterpret_cast<char*>(&no), TAM_BLOCO);
     arquivo.flush();
     return pos;
 }
@@ -47,88 +42,48 @@ long ArvoreBMais::salvarNo(No &no) {
 void ArvoreBMais::reescreverNo(long pos, No &no) {
     arquivo.clear();
     arquivo.seekp(pos);
-    arquivo << (no.folha ? "F" : "I") << ";"
-            << no.qtd_chaves << ";";
-    for (int i = 0; i < 2 * M; i++)
-        arquivo << no.chaves[i] << ";";
-    for (int i = 0; i < 2 * M + 1; i++)
-        arquivo << no.offsets[i] << ";";
-    arquivo << no.proximo << "\n";
+    arquivo.write(reinterpret_cast<char*>(&no), TAM_BLOCO);
     arquivo.flush();
 }
 
 No ArvoreBMais::carregarNo(long pos) {
     arquivo.clear();
     arquivo.seekg(pos);
-    string linha;
-    getline(arquivo, linha);
-    stringstream ss(linha);
-
     No no;
-    string tipo;
-    getline(ss, tipo, ';');
-    no.folha = (tipo == "F");
-
-    string temp;
-    getline(ss, temp, ';');
-    no.qtd_chaves = stoi(temp);
-
-    for (int i = 0; i < 2 * M; i++)
-        getline(ss, no.chaves[i], ';');
-    for (int i = 0; i < 2 * M + 1; i++) {
-        getline(ss, temp, ';');
-        no.offsets[i] = stol(temp);
-    }
-    getline(ss, temp, ';');
-    no.proximo = stol(temp);
+    arquivo.read(reinterpret_cast<char*>(&no), TAM_BLOCO);
     return no;
 }
 
-long ArvoreBMais::dividirNo(long pos, No &no, string chave, long offset_dado) {
-    // Combina chaves existentes + nova
-    vector<pair<string, long>> pares;
-    for (int i = 0; i < no.qtd_chaves; i++)
-        pares.push_back({no.chaves[i], no.offsets[i]});
-    if (!chave.empty())
-        pares.push_back({chave, offset_dado});
-
-    // Ordena mantendo duplicatas
-    stable_sort(pares.begin(), pares.end(),
-                [](auto &a, auto &b) { return a.first < b.first; });
-
+long ArvoreBMais::dividirNo(long pos, No &no, const std::vector<std::pair<std::string, long>>& pares) {
     int total = pares.size();
     int meio = total / 2;
-
     // Atualiza nó atual (primeira metade)
     for (int i = 0; i < meio; i++) {
-        no.chaves[i] = pares[i].first;
+        strncpy(no.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
         no.offsets[i] = pares[i].second;
     }
     no.qtd_chaves = meio;
-
     // Cria novo nó folha (segunda metade)
     No novo_no(true);
     novo_no.qtd_chaves = total - meio;
     for (int i = 0; i < novo_no.qtd_chaves; i++) {
-        novo_no.chaves[i] = pares[meio + i].first;
+        strncpy(novo_no.chaves + i * TAM_CHAVE, pares[meio + i].first.c_str(), TAM_CHAVE);
         novo_no.offsets[i] = pares[meio + i].second;
     }
-
     // Encadeamento das folhas
     novo_no.proximo = no.proximo;
     no.proximo = salvarNo(novo_no);
-
     // Atualiza o nó original
     reescreverNo(pos, no);
-
     return no.proximo;
 }
 
 
-void ArvoreBMais::inserir(string chave, long offset_dado) {
+void ArvoreBMais::inserir(const void* chave, long offset_dado) {
     if (raiz_offset == -1) {
         No novo(true);
-        novo.chaves[0] = chave;
+        string chave_serializada = serialize(chave);
+        strncpy(novo.chaves, chave_serializada.c_str(), TAM_CHAVE);
         novo.offsets[0] = offset_dado;
         novo.qtd_chaves = 1;
         raiz_offset = salvarNo(novo);
@@ -136,40 +91,72 @@ void ArvoreBMais::inserir(string chave, long offset_dado) {
     }
 
     No raiz = carregarNo(raiz_offset);
-
-    // Aceita chaves duplicadas → apenas insere no fim e ordena
-    raiz.chaves[raiz.qtd_chaves] = chave;
-    raiz.offsets[raiz.qtd_chaves] = offset_dado;
-    raiz.qtd_chaves++;
-
-    // Ordena pares (chave, offset) mantendo duplicatas
     vector<pair<string, long>> pares;
-    for (int i = 0; i < raiz.qtd_chaves; i++)
-        pares.push_back({raiz.chaves[i], raiz.offsets[i]});
-    sort(pares.begin(), pares.end(),
-         [](auto &a, auto &b) { return a.first < b.first; });
-
     for (int i = 0; i < raiz.qtd_chaves; i++) {
-        raiz.chaves[i] = pares[i].first;
-        raiz.offsets[i] = pares[i].second;
+        string chave_str(raiz.chaves + i * TAM_CHAVE, TAM_CHAVE);
+        chave_str = chave_str.substr(0, chave_str.find('\0'));
+        pares.emplace_back(chave_str, raiz.offsets[i]);
     }
-
-    if (raiz.qtd_chaves <= 2 * M)
+    string chave_serializada = serialize(chave);
+    pares.emplace_back(chave_serializada, offset_dado);
+    stable_sort(pares.begin(), pares.end(), [this](const auto &a, const auto &b) {
+        return compare(a.first.c_str(), b.first.c_str()) < 0;
+    });
+    int total = pares.size();
+    if (total <= MAX_CHAVES) {
+        for (int i = 0; i < total; i++) {
+            strncpy(raiz.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
+            raiz.offsets[i] = pares[i].second;
+        }
+        raiz.qtd_chaves = total;
         reescreverNo(raiz_offset, raiz);
-    else
-        dividirNo(raiz_offset, raiz, "", -1);
+    } else {
+        // Divisão da raiz folha
+        int meio = total / 2;
+        // Atualiza nó folha original (primeira metade)
+        for (int i = 0; i < meio; i++) {
+            strncpy(raiz.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
+            raiz.offsets[i] = pares[i].second;
+        }
+        raiz.qtd_chaves = meio;
+        // Cria novo nó folha (segunda metade)
+        No novo_no(true);
+        novo_no.qtd_chaves = total - meio;
+        for (int i = 0; i < novo_no.qtd_chaves; i++) {
+            strncpy(novo_no.chaves + i * TAM_CHAVE, pares[meio + i].first.c_str(), TAM_CHAVE);
+            novo_no.offsets[i] = pares[meio + i].second;
+        }
+        novo_no.proximo = raiz.proximo;
+        long novo_offset = salvarNo(novo_no);
+        raiz.proximo = novo_offset;
+        reescreverNo(raiz_offset, raiz);
+        // Cria novo nó raiz interno
+        No raiz_interna(false);
+        raiz_interna.qtd_chaves = 1;
+        // Menor chave do segundo nó folha
+        strncpy(raiz_interna.chaves, novo_no.chaves, TAM_CHAVE);
+        raiz_interna.offsets[0] = raiz_offset;
+        raiz_interna.offsets[1] = novo_offset;
+        raiz_interna.proximo = -1;
+        raiz_offset = salvarNo(raiz_interna);
+    }
 }
 
 
-long ArvoreBMais::buscar(string chave) {
+long ArvoreBMais::buscar(const void* chave) {
     arquivo.clear();
     arquivo.seekg(0);
-    string linha;
+    string chave_serializada = serialize(chave);
     long pos = 0;
-    while (getline(arquivo, linha)) {
-        if (linha.find(chave + ";") != string::npos)
-            return pos;
-        pos = arquivo.tellg();
+    No no;
+
+    while (arquivo.read(reinterpret_cast<char*>(&no), TAM_BLOCO)) {
+        for (int i = 0; i < no.qtd_chaves; i++) {
+            if (compare(chave_serializada.c_str(), no.chaves + i * TAM_CHAVE) == 0) {
+                return pos;
+            }
+        }
+        pos = no.proximo;
     }
     return -1;
 }
@@ -177,8 +164,19 @@ long ArvoreBMais::buscar(string chave) {
 void ArvoreBMais::exibir() {
     arquivo.clear();
     arquivo.seekg(0);
-    string linha;
     cout << "=== Conteúdo da árvore (" << nome_arquivo << ") ===" << endl;
-    while (getline(arquivo, linha))
-        cout << linha << endl;
+    No no;
+    long pos = 0;
+    int no_idx = 0;
+    while (arquivo.read(reinterpret_cast<char*>(&no), TAM_BLOCO)) {
+        cout << "[Nó " << no_idx++ << "] Folha: " << no.folha << ", qtd_chaves: " << no.qtd_chaves << ", proximo: " << no.proximo << endl;
+        for (int i = 0; i < no.qtd_chaves; i++) {
+            string chave_str(no.chaves + i * TAM_CHAVE, TAM_CHAVE);
+            // Remove possíveis caracteres nulos do final
+            chave_str = chave_str.substr(0, chave_str.find('\0'));
+            cout << "  Chave: '" << chave_str << "' | Offset: " << no.offsets[i] << endl;
+        }
+        cout << "-----------------------------" << endl;
+        pos = no.proximo;
+    }
 }
