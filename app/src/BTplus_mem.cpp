@@ -1,25 +1,85 @@
 // arvore.cpp
 #include "../include/BTplus_mem.h"
 #include <algorithm>
+#include <cmath>
 
-No::No(bool eh_folha) {
+// ================= Implementação do No dinâmico =================
+No::No(bool eh_folha, int m, int tam_ch) {
     folha = eh_folha;
     qtd_chaves = 0;
-    memset(chaves, 0, sizeof(chaves));
-    memset(offsets, -1, sizeof(offsets));
+    max_chaves = 2 * m;
+    tam_chave = tam_ch;
     proximo = -1;
-    memset(padding, 0, sizeof(padding)); // inicializa o padding
+    memset(dados, 0, sizeof(dados));
+    for (int i = 0; i <= max_chaves; ++i) setOffset(i, -1);
 }
 
-ArvoreBMais::ArvoreBMais(string nome, CompareFunc cmp, SerializeFunc ser, DeserializeFunc deser)
-    : nome_arquivo(nome), compare(cmp), serialize(ser), deserialize(deser) {
-    raiz_offset = -1;
+char* No::getChave(int index) {
+    if (index < 0 || index >= max_chaves) return nullptr;
+    return dados + (index * tam_chave);
+}
+const char* No::getChave(int index) const {
+    if (index < 0 || index >= max_chaves) return nullptr;
+    return dados + (index * tam_chave);
+}
+long* No::getOffset(int index) {
+    if (index < 0 || index > max_chaves) return nullptr;
+    char* base = dados + calcularOffsetOffsets();
+    return reinterpret_cast<long*>(base) + index;
+}
+const long* No::getOffset(int index) const {
+    if (index < 0 || index > max_chaves) return nullptr;
+    const char* base = dados + calcularOffsetOffsets();
+    return reinterpret_cast<const long*>(base) + index;
+}
+void No::setChave(int index, const char* chave) {
+    if (index < 0 || index >= max_chaves || !chave) return;
+    char* pos = getChave(index);
+    if (!pos) return;
+    // Copia exatamente tam_chave bytes; caller garante tamanho (preencher com zeros se menor)
+    memcpy(pos, chave, tam_chave);
+}
+void No::setOffset(int index, long offset) {
+    long* dst = getOffset(index);
+    if (dst) *dst = offset;
+}
+int No::calcularOffsetChaves() const { return 0; }
+int No::calcularOffsetOffsets() const { return max_chaves * tam_chave; }
+
+// ================= ArvoreBMais =================
+int ArvoreBMais::calcularM(int tam_chave) const {
+    // Fórmula: 2M * tam_chave + (2M + 1) * sizeof(long) <= TAM_BLOCO - sizeof(bool) - sizeof(int)
+    // Resolve para M dado tam_chave.
+    int overhead = sizeof(bool) + sizeof(int); // folha + qtd_chaves dentro do nó (simplificado para cálculo)
+    int available = TAM_BLOCO - overhead;
+    // 2M*tam_chave + (2M+1)*8 <= available
+    // 2M*(tam_chave + 8) + 8 <= available
+    // 2M*(tam_chave + 8) <= available - 8
+    // M <= (available - 8) / (2*(tam_chave + 8))
+    int M = (available - 8) / (2 * (tam_chave + 8));
+    if (M < 1) M = 1;
+    return M;
+}
+
+ArvoreBMais::ArvoreBMais(string nome, int tam_chave, CompareFunc cmp, SerializeFunc ser, DeserializeFunc deser, PrintKeyFunc pk)
+    : nome_arquivo(nome), compare(cmp), serialize(ser), deserialize(deser), printKey(pk) {
     abrirArquivo();
+    // Se arquivo vazio, inicializa metadata
+    arquivo.seekg(0, ios::end);
+    if (arquivo.tellg() == 0) {
+        metadata.tam_chave = tam_chave;
+        metadata.M = calcularM(tam_chave);
+        metadata.max_chaves = 2 * metadata.M;
+        metadata.altura = 0; // árvore vazia
+        metadata.raiz_offset = -1;
+        metadata.qtd_itens = 0;
+        escreverMetadata();
+    } else {
+        carregarMetadata();
+    }
 }
 
-ArvoreBMais::~ArvoreBMais() {
-    arquivo.close();
-}
+ArvoreBMais::~ArvoreBMais() { arquivo.close(); }
 
 void ArvoreBMais::abrirArquivo() {
     arquivo.open(nome_arquivo, ios::in | ios::out | ios::binary);
@@ -30,6 +90,25 @@ void ArvoreBMais::abrirArquivo() {
     }
 }
 
+void ArvoreBMais::escreverMetadata() {
+    arquivo.clear();
+    arquivo.seekp(0, ios::beg);
+    arquivo.write(reinterpret_cast<char*>(&metadata), sizeof(Metadata));
+    // Preenche restante do bloco de metadata com zeros
+    size_t restante = TAM_BLOCO - sizeof(Metadata);
+    if (restante > 0) {
+        vector<char> zeros(restante, 0);
+        arquivo.write(zeros.data(), restante);
+    }
+    arquivo.flush();
+}
+void ArvoreBMais::carregarMetadata() {
+    arquivo.clear();
+    arquivo.seekg(0, ios::beg);
+    arquivo.read(reinterpret_cast<char*>(&metadata), sizeof(Metadata));
+}
+void ArvoreBMais::atualizarMetadata() { escreverMetadata(); }
+
 long ArvoreBMais::salvarNo(No &no) {
     arquivo.clear();
     arquivo.seekp(0, ios::end);
@@ -38,14 +117,12 @@ long ArvoreBMais::salvarNo(No &no) {
     arquivo.flush();
     return pos;
 }
-
 void ArvoreBMais::reescreverNo(long pos, No &no) {
     arquivo.clear();
     arquivo.seekp(pos);
     arquivo.write(reinterpret_cast<char*>(&no), TAM_BLOCO);
     arquivo.flush();
 }
-
 No ArvoreBMais::carregarNo(long pos) {
     arquivo.clear();
     arquivo.seekg(pos);
@@ -55,281 +132,214 @@ No ArvoreBMais::carregarNo(long pos) {
 }
 
 long ArvoreBMais::dividirNo(long pos, No &no, const std::vector<std::pair<std::string, long>>& pares) {
-    int total = pares.size();
+    int total = (int)pares.size();
     int meio = total / 2;
-    // Atualiza nó atual (primeira metade)
-    for (int i = 0; i < meio; i++) {
-        strncpy(no.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
-        no.offsets[i] = pares[i].second;
+    // Atualiza nó atual
+    for (int i = 0; i < meio; ++i) {
+        no.setChave(i, pares[i].first.c_str());
+        no.setOffset(i, pares[i].second);
     }
     no.qtd_chaves = meio;
-    // Cria novo nó folha (segunda metade)
-    No novo_no(true);
-    novo_no.qtd_chaves = total - meio;
-    for (int i = 0; i < novo_no.qtd_chaves; i++) {
-        strncpy(novo_no.chaves + i * TAM_CHAVE, pares[meio + i].first.c_str(), TAM_CHAVE);
-        novo_no.offsets[i] = pares[meio + i].second;
+    // Novo nó folha
+    No novo(true, metadata.M, metadata.tam_chave);
+    novo.qtd_chaves = total - meio;
+    for (int i = 0; i < novo.qtd_chaves; ++i) {
+        novo.setChave(i, pares[meio + i].first.c_str());
+        novo.setOffset(i, pares[meio + i].second);
     }
-    // Encadeamento das folhas
-    novo_no.proximo = no.proximo;
-    no.proximo = salvarNo(novo_no);
-    // Atualiza o nó original
+    novo.proximo = no.proximo;
+    long novo_offset = salvarNo(novo);
+    no.proximo = novo_offset;
     reescreverNo(pos, no);
-    return no.proximo;
-}
-
-
-void ArvoreBMais::inserir(const void* chave, long offset_dado) {
-    if (raiz_offset == -1) {
-        No novo(true);
-        string chave_serializada = serialize(chave);
-        strncpy(novo.chaves, chave_serializada.c_str(), TAM_CHAVE);
-        novo.offsets[0] = offset_dado;
-        novo.qtd_chaves = 1;
-        raiz_offset = salvarNo(novo);
-        return;
-    }
-
-    No raiz = carregarNo(raiz_offset);
-    
-    // Se a raiz é uma folha, inserir diretamente
-    if (raiz.folha) {
-        vector<pair<string, long>> pares;
-        for (int i = 0; i < raiz.qtd_chaves; i++) {
-            string chave_str(raiz.chaves + i * TAM_CHAVE, TAM_CHAVE);
-            chave_str = chave_str.substr(0, chave_str.find('\0'));
-            pares.emplace_back(chave_str, raiz.offsets[i]);
-        }
-        string chave_serializada = serialize(chave);
-        pares.emplace_back(chave_serializada, offset_dado);
-        stable_sort(pares.begin(), pares.end(), [this](const auto &a, const auto &b) {
-            return compare(a.first.c_str(), b.first.c_str()) < 0;
-        });
-        int total = pares.size();
-        if (total <= MAX_CHAVES) {
-            for (int i = 0; i < total; i++) {
-                strncpy(raiz.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
-                raiz.offsets[i] = pares[i].second;
-            }
-            raiz.qtd_chaves = total;
-            reescreverNo(raiz_offset, raiz);
-        } else {
-            // Divisão da raiz folha
-            int meio = total / 2;
-            // Atualiza nó folha original (primeira metade)
-            for (int i = 0; i < meio; i++) {
-                strncpy(raiz.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
-                raiz.offsets[i] = pares[i].second;
-            }
-            raiz.qtd_chaves = meio;
-            // Cria novo nó folha (segunda metade)
-            No novo_no(true);
-            novo_no.qtd_chaves = total - meio;
-            for (int i = 0; i < novo_no.qtd_chaves; i++) {
-                strncpy(novo_no.chaves + i * TAM_CHAVE, pares[meio + i].first.c_str(), TAM_CHAVE);
-                novo_no.offsets[i] = pares[meio + i].second;
-            }
-            novo_no.proximo = raiz.proximo;
-            long novo_offset = salvarNo(novo_no);
-            raiz.proximo = novo_offset;
-            reescreverNo(raiz_offset, raiz);
-            // Cria novo nó raiz interno
-            No raiz_interna(false);
-            raiz_interna.qtd_chaves = 1;
-            // Copia apenas a chave separadora (primeira chave do segundo nó)
-            strncpy(raiz_interna.chaves, novo_no.chaves, TAM_CHAVE);
-            // Offsets apontam para os nós filhos (não para dados)
-            raiz_interna.offsets[0] = raiz_offset;  // primeiro filho (folha esquerda)
-            raiz_interna.offsets[1] = novo_offset;  // segundo filho (folha direita)
-            raiz_interna.proximo = -1;
-            raiz_offset = salvarNo(raiz_interna);
-        }
-    } else {
-        // Se a raiz é um nó interno, encontrar a folha correta para inserir
-        long folha_offset = encontrarFolha(raiz_offset, chave);
-        string chave_serializada = serialize(chave);
-        
-        // Carrega a folha e insere nela
-        No folha = carregarNo(folha_offset);
-        vector<pair<string, long>> pares;
-        for (int i = 0; i < folha.qtd_chaves; i++) {
-            string chave_str(folha.chaves + i * TAM_CHAVE, TAM_CHAVE);
-            chave_str = chave_str.substr(0, chave_str.find('\0'));
-            pares.emplace_back(chave_str, folha.offsets[i]);
-        }
-        pares.emplace_back(chave_serializada, offset_dado);
-        stable_sort(pares.begin(), pares.end(), [this](const auto &a, const auto &b) {
-            return compare(a.first.c_str(), b.first.c_str()) < 0;
-        });
-        
-        // Reinsere na folha
-        int total = pares.size();
-        if (total <= MAX_CHAVES) {
-            for (int i = 0; i < total; i++) {
-                strncpy(folha.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
-                folha.offsets[i] = pares[i].second;
-            }
-            folha.qtd_chaves = total;
-            reescreverNo(folha_offset, folha);
-        } else {
-            // Divisão de folha necessária
-            int meio = total / 2;
-            
-            // Atualiza folha atual (primeira metade)
-            for (int i = 0; i < meio; i++) {
-                strncpy(folha.chaves + i * TAM_CHAVE, pares[i].first.c_str(), TAM_CHAVE);
-                folha.offsets[i] = pares[i].second;
-            }
-            folha.qtd_chaves = meio;
-            
-            // Cria nova folha (segunda metade)
-            No nova_folha(true);
-            nova_folha.qtd_chaves = total - meio;
-            for (int i = 0; i < nova_folha.qtd_chaves; i++) {
-                strncpy(nova_folha.chaves + i * TAM_CHAVE, pares[meio + i].first.c_str(), TAM_CHAVE);
-                nova_folha.offsets[i] = pares[meio + i].second;
-            }
-            nova_folha.proximo = folha.proximo;
-            long nova_folha_offset = salvarNo(nova_folha);
-            folha.proximo = nova_folha_offset;
-            reescreverNo(folha_offset, folha);
-            
-            // Atualizar raiz para incluir nova folha
-            // Precisa adicionar nova chave separadora na raiz
-            string chave_separadora(nova_folha.chaves, TAM_CHAVE);
-            chave_separadora = chave_separadora.substr(0, chave_separadora.find('\0'));
-            
-            // Carrega a raiz e adiciona nova entrada
-            No raiz = carregarNo(raiz_offset);
-            if (raiz.qtd_chaves < MAX_CHAVES) {
-                // Espaço na raiz - adiciona nova entrada
-                raiz.qtd_chaves++;
-                strncpy(raiz.chaves + (raiz.qtd_chaves - 1) * TAM_CHAVE, chave_separadora.c_str(), TAM_CHAVE);
-                raiz.offsets[raiz.qtd_chaves] = nova_folha_offset;
-                reescreverNo(raiz_offset, raiz);
-            } else {
-                // Raiz cheia - precisa dividir a raiz (crescimento da árvore)
-                vector<pair<string, long>> entradas_raiz;
-                for (int i = 0; i < raiz.qtd_chaves; i++) {
-                    string chave_str(raiz.chaves + i * TAM_CHAVE, TAM_CHAVE);
-                    chave_str = chave_str.substr(0, chave_str.find('\0'));
-                    entradas_raiz.emplace_back(chave_str, raiz.offsets[i + 1]);
-                }
-                entradas_raiz.emplace_back(chave_separadora, nova_folha_offset);
-                
-                sort(entradas_raiz.begin(), entradas_raiz.end(), [this](const auto &a, const auto &b) {
-                    return compare(a.first.c_str(), b.first.c_str()) < 0;
-                });
-                
-                int meio_raiz = entradas_raiz.size() / 2;
-                
-                // Atualiza raiz atual (primeira metade)
-                raiz.qtd_chaves = meio_raiz;
-                for (int i = 0; i < meio_raiz; i++) {
-                    strncpy(raiz.chaves + i * TAM_CHAVE, entradas_raiz[i].first.c_str(), TAM_CHAVE);
-                    raiz.offsets[i + 1] = entradas_raiz[i].second;
-                }
-                
-                // Cria novo nó interno (segunda metade)
-                No novo_interno(false);
-                novo_interno.qtd_chaves = entradas_raiz.size() - meio_raiz - 1;
-                for (int i = 0; i < novo_interno.qtd_chaves; i++) {
-                    strncpy(novo_interno.chaves + i * TAM_CHAVE, entradas_raiz[meio_raiz + 1 + i].first.c_str(), TAM_CHAVE);
-                    novo_interno.offsets[i + 1] = entradas_raiz[meio_raiz + 1 + i].second;
-                }
-                novo_interno.offsets[0] = entradas_raiz[meio_raiz].second;
-                long novo_interno_offset = salvarNo(novo_interno);
-                
-                reescreverNo(raiz_offset, raiz);
-                
-                // Cria nova raiz
-                No nova_raiz(false);
-                nova_raiz.qtd_chaves = 1;
-                strncpy(nova_raiz.chaves, entradas_raiz[meio_raiz].first.c_str(), TAM_CHAVE);
-                nova_raiz.offsets[0] = raiz_offset;
-                nova_raiz.offsets[1] = novo_interno_offset;
-                raiz_offset = salvarNo(nova_raiz);
-            }
-        }
-    }
-}
-
-
-long ArvoreBMais::buscar(const void* chave) {
-    arquivo.clear();
-    arquivo.seekg(0);
-    string chave_serializada = serialize(chave);
-    long pos = 0;
-    No no;
-
-    while (arquivo.read(reinterpret_cast<char*>(&no), TAM_BLOCO)) {
-        for (int i = 0; i < no.qtd_chaves; i++) {
-            if (compare(chave_serializada.c_str(), no.chaves + i * TAM_CHAVE) == 0) {
-                return pos;
-            }
-        }
-        pos = no.proximo;
-    }
-    return -1;
-}
-
-void ArvoreBMais::exibir() {
-    arquivo.clear();
-    cout << "=== Conteúdo da árvore (" << nome_arquivo << ") ===" << endl;
-    cout << "Raiz offset: " << raiz_offset << endl;
-    
-    if (raiz_offset == -1) {
-        cout << "Árvore vazia" << endl;
-        return;
-    }
-    
-    // Exibe a árvore começando pela raiz
-    exibirNo(raiz_offset, 0);
-}
-
-void ArvoreBMais::exibirNo(long offset, int nivel) {
-    if (offset == -1) return;
-    
-    No no = carregarNo(offset);
-    string indent(nivel * 2, ' ');
-    
-    cout << indent << "[Nó offset=" << offset << "] Folha: " << no.folha 
-         << ", qtd_chaves: " << no.qtd_chaves << ", proximo: " << no.proximo << endl;
-    
-    for (int i = 0; i < no.qtd_chaves; i++) {
-        string chave_str(no.chaves + i * TAM_CHAVE, TAM_CHAVE);
-        chave_str = chave_str.substr(0, chave_str.find('\0'));
-        cout << indent << "  Chave: '" << chave_str << "' | Offset: " << no.offsets[i] << endl;
-        
-        // Se é nó interno, exibe recursivamente os filhos
-        if (!no.folha && i == 0) {
-            exibirNo(no.offsets[i], nivel + 1);
-        }
-    }
-    
-    // Para nós internos, exibe o último filho
-    if (!no.folha && no.qtd_chaves > 0) {
-        exibirNo(no.offsets[no.qtd_chaves], nivel + 1);
-    }
-    
-    cout << indent << "-----------------------------" << endl;
+    return novo_offset;
 }
 
 long ArvoreBMais::encontrarFolha(long no_offset, const void* chave) {
     No no = carregarNo(no_offset);
-    
-    if (no.folha) {
-        return no_offset;
-    }
-    
-    string chave_serializada = serialize(chave);
-    
-    // Encontra o filho correto baseado nas chaves separadoras
+    if (no.folha) return no_offset;
+    string chave_ser = serialize(chave);
     int i = 0;
-    while (i < no.qtd_chaves && compare(chave_serializada.c_str(), no.chaves + i * TAM_CHAVE) >= 0) {
-        i++;
+    while (i < no.qtd_chaves && compare(chave_ser.c_str(), no.getChave(i)) >= 0) i++;
+    long* childPtr = const_cast<long*>(no.getOffset(i));
+    return encontrarFolha(*childPtr, chave);
+}
+
+ArvoreBMais::SplitResult ArvoreBMais::inserirRecursivo(long no_offset, const std::string& chave_ser, long dado_offset) {
+    No no = carregarNo(no_offset);
+    fprintf(stderr, "[DEBUG] inserirRecursivo offset=%ld folha=%d qtd=%d chave='%s'\n", no_offset, no.folha, no.qtd_chaves, chave_ser.c_str());
+    if (no.folha) {
+        // Inserir em folha
+        vector<pair<string,long>> pares;
+        for (int i=0;i<no.qtd_chaves;++i) {
+            string c(no.getChave(i), no.tam_chave); // representação fixa
+            pares.emplace_back(c, *no.getOffset(i));
+        }
+        pares.emplace_back(chave_ser, dado_offset);
+        std::sort(pares.begin(), pares.end(), [&](const auto& A, const auto& B){
+    // A.first e B.first são strings serializadas
+    void* ca = deserialize(A.first);
+    void* cb = deserialize(B.first);
+    int r = compare(ca, cb);
+    delete reinterpret_cast<char*>(ca);
+    delete reinterpret_cast<char*>(cb);
+    return r < 0;
+});
+        if ((int)pares.size() <= no.max_chaves) {
+            for (int i=0;i<(int)pares.size();++i) { no.setChave(i, pares[i].first.c_str()); no.setOffset(i, pares[i].second); }
+            no.qtd_chaves = (int)pares.size();
+            reescreverNo(no_offset, no);
+            return ArvoreBMais::SplitResult();
+        } else {
+            // split folha
+            int meio = pares.size()/2;
+            for (int i=0;i<meio;++i){ no.setChave(i, pares[i].first.c_str()); no.setOffset(i, pares[i].second);} no.qtd_chaves = meio;
+            No direita(true, metadata.M, metadata.tam_chave);
+            direita.qtd_chaves = (int)pares.size()-meio;
+            for (int i=0;i<direita.qtd_chaves;++i){ direita.setChave(i, pares[meio+i].first.c_str()); direita.setOffset(i, pares[meio+i].second);} 
+            direita.proximo = no.proximo;
+            long direita_offset = salvarNo(direita);
+            no.proximo = direita_offset;
+            reescreverNo(no_offset, no);
+            ArvoreBMais::SplitResult res; res.split = true; res.promotedKey = string(direita.getChave(0), metadata.tam_chave); res.rightOffset = direita_offset; return res;
+        }
+    } else {
+        // Nó interno: encontrar filho
+    int i=0; while (i<no.qtd_chaves && compare(chave_ser.c_str(), no.getChave(i))>=0) { i++; }
+    fprintf(stderr, "[DEBUG] Descendo para filho index=%d (qtd_chaves=%d)\n", i, no.qtd_chaves);
+        long child = *no.getOffset(i);
+    fprintf(stderr, "[DEBUG] Child offset=%ld\n", child);
+        SplitResult childRes = inserirRecursivo(child, chave_ser, dado_offset);
+    if (!childRes.split) return ArvoreBMais::SplitResult();
+        // Precisa inserir chave promovida neste nó interno
+        vector<string> chaves; vector<long> filhos;
+        // Carregar filhos existentes
+        for (int k=0;k<=no.qtd_chaves;++k) filhos.push_back(*no.getOffset(k));
+    for (int k=0;k<no.qtd_chaves;++k){ string c(no.getChave(k), no.tam_chave); chaves.push_back(c);}        
+        // Inserir promotedKey na posição correta
+        int pos=0; while (pos<(int)chaves.size() && compare(childRes.promotedKey.c_str(), chaves[pos].c_str())>0) pos++;
+        chaves.insert(chaves.begin()+pos, childRes.promotedKey);
+        filhos.insert(filhos.begin()+pos+1, childRes.rightOffset);
+        if ((int)chaves.size() <= no.max_chaves) {
+            no.qtd_chaves = (int)chaves.size();
+            for (int k=0;k<no.qtd_chaves;++k){ no.setChave(k, chaves[k].c_str()); no.setOffset(k, filhos[k]); }
+            no.setOffset(no.qtd_chaves, filhos[no.qtd_chaves]);
+            reescreverNo(no_offset, no);
+            fprintf(stderr, "[DEBUG] Inserido promotedKey '%s' em nó interno offset=%ld sem split; qtd_chaves=%d\n", childRes.promotedKey.c_str(), no_offset, no.qtd_chaves);
+            return ArvoreBMais::SplitResult();
+        } else {
+            // Split interno
+            int meio = chaves.size()/2;
+            string chave_promovida = chaves[meio];
+            fprintf(stderr, "[DEBUG] Split interno offset=%ld meio=%d promovida='%s' total_chaves=%zu\n", no_offset, meio, chave_promovida.c_str(), chaves.size());
+            No direita(false, metadata.M, metadata.tam_chave);
+            // direita recebe chaves após meio
+            direita.qtd_chaves = (int)chaves.size() - meio - 1;
+            for (int k=0;k<direita.qtd_chaves;++k){ direita.setChave(k, chaves[meio+1+k].c_str()); direita.setOffset(k, filhos[meio+1+k]); }
+            direita.setOffset(direita.qtd_chaves, filhos.back());
+            long direita_offset = salvarNo(direita);
+            // no (esquerda) mantém chaves antes de meio
+            no.qtd_chaves = meio;
+            for (int k=0;k<meio;++k){ no.setChave(k, chaves[k].c_str()); no.setOffset(k, filhos[k]); }
+            no.setOffset(meio, filhos[meio]);
+            reescreverNo(no_offset, no);
+            ArvoreBMais::SplitResult res; res.split=true; res.promotedKey=chave_promovida; res.rightOffset=direita_offset; return res;
+        }
     }
-    
-    // Recursivamente encontra a folha no filho apropriado
-    return encontrarFolha(no.offsets[i], chave);
+}
+
+void ArvoreBMais::inserir(const void* chave, long offset_dado) {
+    std::string chave_ser = serialize(chave);
+    if (metadata.raiz_offset == -1) {
+        No folha(true, metadata.M, metadata.tam_chave);
+        folha.setChave(0, chave_ser.c_str()); folha.setOffset(0, offset_dado); folha.qtd_chaves=1;
+        metadata.raiz_offset = salvarNo(folha); metadata.qtd_itens=1; metadata.altura=1; atualizarMetadata(); return;
+    }
+    ArvoreBMais::SplitResult res = inserirRecursivo(metadata.raiz_offset, chave_ser, offset_dado);
+    if (res.split) {
+        // Criar nova raiz
+        No nova_raiz(false, metadata.M, metadata.tam_chave);
+        nova_raiz.qtd_chaves = 1;
+        nova_raiz.setChave(0, res.promotedKey.c_str());
+        nova_raiz.setOffset(0, metadata.raiz_offset);
+        nova_raiz.setOffset(1, res.rightOffset);
+        metadata.raiz_offset = salvarNo(nova_raiz);
+        metadata.altura++;
+    }
+    metadata.qtd_itens++;
+    atualizarMetadata();
+}
+
+void ArvoreBMais::registrarBusca(const string& chave, int blocos_lidos) {
+    string log_nome = nome_arquivo + ".log";
+    ofstream log(log_nome, ios::app);
+    log << chave << ';' << blocos_lidos << '\n';
+}
+
+long ArvoreBMais::buscar(const void* chave) {
+    if (metadata.raiz_offset == -1) {
+        registrarBusca(serialize(chave), 0);
+        return -1;
+    }
+    string chave_ser = serialize(chave);
+    int blocos = 0;
+    long atual = metadata.raiz_offset;
+    while (atual != -1) {
+        No no = carregarNo(atual);
+        ++blocos;
+        // Busca linear nas chaves
+        for (int i=0;i<no.qtd_chaves;++i){
+            if (compare(chave_ser.c_str(), no.getChave(i))==0){
+                registrarBusca(chave_ser, blocos);
+                return *no.getOffset(i);
+            }
+            if (!no.folha && compare(chave_ser.c_str(), no.getChave(i))<0){
+                atual = *no.getOffset(i);
+                goto next_loop; // simula descida
+            }
+        }
+        if (!no.folha) {
+            atual = *no.getOffset(no.qtd_chaves);
+        } else {
+            atual = no.proximo; // seguir folhas para busca sequencial
+        }
+        next_loop:;
+    }
+    registrarBusca(chave_ser, blocos);
+    return -1;
+}
+
+void ArvoreBMais::exibir() {
+    cout << "=== Conteúdo da árvore (" << nome_arquivo << ") ===" << endl;
+    cout << "Altura: " << metadata.altura << " | Itens: " << metadata.qtd_itens << " | tam_chave: " << metadata.tam_chave << " | M: " << metadata.M << endl;
+    cout << "Raiz offset: " << metadata.raiz_offset << endl;
+    if (metadata.raiz_offset == -1) { cout << "Árvore vazia" << endl; return; }
+    exibirNo(metadata.raiz_offset, 0);
+}
+
+void ArvoreBMais::exibirNo(long offset, int nivel) {
+    if (offset == -1) return;
+    No no = carregarNo(offset);
+    string indent(nivel*2, ' ');
+    cout << indent << "[Nó offset=" << offset << "] Folha:" << no.folha
+         << " qtd_chaves:" << no.qtd_chaves << " proximo:" << no.proximo << "\n";
+    for (int i = 0; i < no.qtd_chaves; ++i) {
+        string chave_fmt;
+        if (printKey) {
+            chave_fmt = printKey(no.getChave(i), metadata.tam_chave);
+        } else {
+            // fallback: usa conteúdo bruto até '\0'
+            string raw(no.getChave(i), metadata.tam_chave);
+            chave_fmt = raw; // imprime bytes brutos (para texto zero-terminado ainda funciona)
+        }
+        cout << indent << "  Chave:'" << chave_fmt << "'";
+        if (no.folha) cout << " | DadoOffset:" << *no.getOffset(i) << "\n";
+        else          cout << " | FilhoOffset:" << *no.getOffset(i) << "\n";
+    }
+    if (!no.folha) {
+        // último ponteiro
+        cout << indent << "  Filho final offset:" << *no.getOffset(no.qtd_chaves) << "\n";
+        for (int i = 0; i <= no.qtd_chaves; ++i)
+            exibirNo(*no.getOffset(i), nivel + 1);
+    }
+    cout << indent << "-----------------------------\n";
 }

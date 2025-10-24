@@ -1,70 +1,34 @@
 #include "../include/BTplus_mem.h"
 #include <cstring>
+#include <string>
+#include <iostream>
 
-// Função de comparação para strings
-int cmp_str(const void* a, const void* b) {
-    return strncmp((const char*)a, (const char*)b, TAM_CHAVE);
-}
+using namespace std;
 
-// Serializa: recebe ponteiro para string, retorna string
-string serialize_str(const void* chave) {
-    return string((const char*)chave);
-}
-
-// Desserializa: recebe string, retorna ponteiro para buffer
+static int g_tam_chave = 64;
+int cmp_str(const void* a, const void* b) { return strncmp((const char*)a, (const char*)b, g_tam_chave); }
+string serialize_str(const void* chave) { return string((const char*)chave); }
 void* deserialize_str(const string& s) {
-    char* buf = new char[TAM_CHAVE];
-    memset(buf, 0, TAM_CHAVE);
-    strncpy(buf, s.c_str(), TAM_CHAVE);
+    char* buf = new char[g_tam_chave];
+    memset(buf, 0, g_tam_chave);
+    strncpy(buf, s.c_str(), g_tam_chave - 1);
     return buf;
 }
+string print_str(const char* buf, int tam) { return string(buf, strnlen(buf, tam)); }
 
 int main() {
-    ArvoreBMais arv("data/indice.bin", cmp_str, serialize_str, deserialize_str);
-    
-    // Inserindo 30 exemplos variados
-    arv.inserir("ArtigoA", 100);
-    arv.inserir("ArtigoB", 200);
-    arv.inserir("ArtigoC", 300);
-    arv.inserir("ArtigoD", 400);
-    arv.inserir("ArtigoE", 500);
-    arv.inserir("ArtigoF", 600);
-    arv.inserir("ArtigoG", 700);
-    arv.inserir("ArtigoH", 800);
-    arv.inserir("ArtigoE", 900);  // Duplicata
-    arv.inserir("ArtigoI", 1000);
-    arv.inserir("ArtigoJ", 1100);
-    arv.inserir("ArtigoK", 1200);
-    arv.inserir("ArtigoL", 1300);
-    arv.inserir("ArtigoM", 1400);
-    arv.inserir("ArtigoN", 1500);
-    arv.inserir("ArtigoO", 1600);
-    arv.inserir("ArtigoP", 1700);
-    arv.inserir("ArtigoQ", 1800);
-    arv.inserir("ArtigoR", 1900);
-    arv.inserir("ArtigoS", 2000);
-    arv.inserir("ArtigoT", 2100);
-    arv.inserir("ArtigoU", 2200);
-    arv.inserir("ArtigoV", 2300);
-    arv.inserir("ArtigoW", 2400);
-    arv.inserir("ArtigoX", 2500);
-    arv.inserir("ArtigoY", 2600);
-    arv.inserir("ArtigoZ", 2700);
-    arv.inserir("ArtigoA", 2800);  // Duplicata
-    arv.inserir("ArtigoC", 2900);  // Duplicata
-    arv.inserir("ArtigoZ", 3000);  // Duplicata
-    
+    int tam_chave = g_tam_chave; // adequado para 'ArtigoX'
+    // Remove arquivo antigo para evitar formato legado
+    remove("data/indice.bin");
+    ArvoreBMais arv("data/indice.bin", tam_chave, cmp_str, serialize_str, deserialize_str, print_str);
+
+    const char* artigos[] = {"ArtigoA","ArtigoB","ArtigoC","ArtigoD","ArtigoE","ArtigoF","ArtigoG","ArtigoH","ArtigoE","ArtigoI","ArtigoJ","ArtigoK","ArtigoL","ArtigoM","ArtigoN","ArtigoO","ArtigoP","ArtigoQ","ArtigoR","ArtigoS","ArtigoT","ArtigoU","ArtigoV","ArtigoW","ArtigoX","ArtigoY","ArtigoZ","ArtigoA","ArtigoC","ArtigoZ"};
+    long offs[] = {100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2100,2200,2300,2400,2500,2600,2700,2800,2900,3000};
+    for (int i=0;i<30;i++) arv.inserir(artigos[i], offs[i]);
+
     cout << "Inseridos 30 artigos na árvore B+" << endl;
-    
-    // Teste de busca
-    long pos = arv.buscar("ArtigoE");
-    if (pos != -1) {
-        cout << "ArtigoE encontrado na posição: " << pos << endl;
-    } else {
-        cout << "ArtigoE não encontrado." << endl;
-    }
-    
-    // Exibe a estrutura da árvore
+    const char* chaveBusca = "ArtigoE"; long pos = arv.buscar(chaveBusca);
+    if (pos != -1) cout << chaveBusca << " encontrado com offset de dado: " << pos << endl; else cout << chaveBusca << " não encontrado." << endl;
     arv.exibir();
     return 0;
 }
