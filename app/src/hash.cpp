@@ -16,7 +16,7 @@ void logMsg(LogLevel level, const string &msg) {
     }
 }
 
-const int TAM_BLOCO = 4096;
+const int TAM_BLOCO_HASH = 4096;
 const int ARTIGOS_POR_BLOCO = 2;
 const int NUM_BUCKETS = 2000;
 
@@ -30,7 +30,7 @@ void gerarHash(const char *arquivoData) {
     logMsg(INFO, string("Arquivo de entrada: ") + arquivoData);
     logMsg(INFO, "Número de buckets: " + to_string(NUM_BUCKETS));
     logMsg(INFO, "Artigos por bloco: " + to_string(ARTIGOS_POR_BLOCO));
-    logMsg(INFO, "Tamanho do bloco: " + to_string(TAM_BLOCO) + " bytes");
+    logMsg(INFO, "Tamanho do bloco: " + to_string(TAM_BLOCO_HASH) + " bytes");
 
     auto inicio = chrono::high_resolution_clock::now();
 
@@ -78,7 +78,7 @@ void gerarHash(const char *arquivoData) {
 
             BlocoHeader header = { -1, 0 };
             dataOut.write(reinterpret_cast<char*>(&header), sizeof(header));
-            vector<char> espaco(TAM_BLOCO - static_cast<int>(sizeof(header)), 0);
+            vector<char> espaco(TAM_BLOCO_HASH - static_cast<int>(sizeof(header)), 0);
             dataOut.write(espaco.data(), espaco.size());
 
             bucket.offsetPrimeiro = novoOffset;
@@ -106,7 +106,7 @@ void gerarHash(const char *arquivoData) {
             BlocoHeader novoHeader = { -1, 0 };
             dataOut.seekp(novoOffset, ios::beg);
             dataOut.write(reinterpret_cast<char*>(&novoHeader), sizeof(novoHeader));
-            vector<char> esp(TAM_BLOCO - static_cast<int>(sizeof(novoHeader)), 0);
+            vector<char> esp(TAM_BLOCO_HASH - static_cast<int>(sizeof(novoHeader)), 0);
             dataOut.write(esp.data(), esp.size());
 
             bucket.offsetUltimo = novoOffset;

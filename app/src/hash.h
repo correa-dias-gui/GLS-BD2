@@ -12,7 +12,7 @@ using namespace std;
 // ================================
 // CONFIGURAÇÕES
 // ================================
-extern const int TAM_BLOCO;
+extern const int TAM_BLOCO_HASH;
 extern const int ARTIGOS_POR_BLOCO;
 extern const int NUM_BUCKETS;
 
