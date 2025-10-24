@@ -7,7 +7,7 @@
 
 using namespace std;
 
-// Função para separar uma linha CSV em campos
+//Separa as linhas do csv em campos
 vector<string> splitCSVLine(const string &linha) {
     vector<string> campos;
     string atual;
@@ -25,7 +25,7 @@ vector<string> splitCSVLine(const string &linha) {
     }
     campos.push_back(atual);
 
-    // Remove aspas externas
+    //Remove aspas externas
     for (auto &campo : campos) {
         if (!campo.empty() && campo.front() == '"') campo.erase(0, 1);
         if (!campo.empty() && campo.back() == '"') campo.pop_back();
@@ -34,7 +34,7 @@ vector<string> splitCSVLine(const string &linha) {
     return campos;
 }
 
-// Preenche a struct Artigo a partir do vetor de campos CSV
+//Preenche a struct Artigo a partir do vetor de campos csv
 bool preencherArtigo(Artigo &a, const vector<string> &campos) {
     if (campos.size() != 7) return false;
 
@@ -91,22 +91,15 @@ int main(int argc, char* argv[]) {
         fwrite(&a, sizeof(Artigo), 1, dataBin);
         total++;
 
-        if (total <= 3) {
-            cout << "Lido artigo ID=" << a.id << " | Título=" << a.titulo << "\n";
-        }
-
-        if (total % 10000 == 0)
+        if (total % 100000 == 0)
             cout << total << " registros processados...\n";
     }
 
     fclose(dataBin);
     arquivoCSV.close();
+    cout << "\nUpload concluído e arquivo gerado: data.bin (" << sizeof(Artigo) << " bytes por registro)\n\n";
 
-    cout << "✅ Upload concluído. Total de registros: " << total << "\n";
-    cout << "Arquivo gerado: data.bin (" << sizeof(Artigo) << " bytes por registro)\n";
-
-    // Agora chamamos o hash
+    //Chama o hash
     gerarHash("data.bin");
-
     return 0;
 }
