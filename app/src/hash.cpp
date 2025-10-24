@@ -1,47 +1,77 @@
 #include "hash.h"
+#include <chrono>
+#include <cstdlib>
 
-// mantém constantes visíveis (mesmos valores do código original)
+enum LogLevel { ERROR = 0, WARN = 1, INFO = 2, DEBUG = 3 };
+const LogLevel currentLevel = DEBUG;
+
+void logMsg(LogLevel level, const string &msg) {
+    if (level <= currentLevel) {
+        switch (level) {
+            case ERROR: cerr << "[ERROR] " << msg << endl; break;
+            case WARN:  cout << "[WARN]  " << msg << endl; break;
+            case INFO:  cout << "[INFO]  " << msg << endl; break;
+            case DEBUG: cout << "[DEBUG] " << msg << endl; break;
+        }
+    }
+}
+
 const int TAM_BLOCO = 4096;
 const int ARTIGOS_POR_BLOCO = 2;
 const int NUM_BUCKETS = 2000;
 
-// Função hash simples
+//Funcao hash
 static int funcaoHash(int id) {
     return id % NUM_BUCKETS;
 }
 
 void gerarHash(const char *arquivoData) {
+    logMsg(INFO, "================ INÍCIO DA INDEXAÇÃO ================");
+    logMsg(INFO, string("Arquivo de entrada: ") + arquivoData);
+    logMsg(INFO, "Número de buckets: " + to_string(NUM_BUCKETS));
+    logMsg(INFO, "Artigos por bloco: " + to_string(ARTIGOS_POR_BLOCO));
+    logMsg(INFO, "Tamanho do bloco: " + to_string(TAM_BLOCO) + " bytes");
+
+    auto inicio = chrono::high_resolution_clock::now();
+
     ifstream dataIn(arquivoData, ios::binary);
     if (!dataIn) {
-        cerr << "Erro ao abrir " << arquivoData << "\n";
+        logMsg(ERROR, string("Erro ao abrir arquivo de dados: ") + arquivoData);
         return;
     }
 
-    // Cria ou sobrescreve data_hash.dat
+    //Cria ou sobrescreve data_hash.dat
     fstream dataOut("data_hash.dat", ios::in | ios::out | ios::binary | ios::trunc);
     if (!dataOut) {
-        cerr << "Erro ao criar data_hash.dat\n";
-        dataIn.close();
+        logMsg(ERROR, "Erro ao criar data_hash.dat");
         return;
     }
 
-    // Cria index.bin (streaming)
+    //Cria index.bin
     ofstream indexOut("index.bin", ios::binary);
     if (!indexOut) {
-        cerr << "Erro ao criar index.bin\n";
-        dataIn.close();
-        dataOut.close();
+        logMsg(ERROR, "Erro ao criar index.bin");
         return;
     }
 
     vector<ControleBucket> controle(NUM_BUCKETS);
 
     Artigo a;
+    long totalArtigos = 0;
+    long totalBlocos = 0;
+
+    //Loop de insercao
     while (dataIn.read(reinterpret_cast<char*>(&a), sizeof(Artigo))) {
+        totalArtigos++;
         int b = funcaoHash(a.id);
         auto &bucket = controle[b];
 
-        // Se bucket ainda não tem bloco, cria o primeiro
+        //debug a cada 100000 artigos
+        if (totalArtigos % 100000 == 0)
+            logMsg(DEBUG, "Processando artigo #" + to_string(totalArtigos) +
+                          " ID=" + to_string(a.id) + " no bucket " + to_string(b));
+
+        //Se o bucket ainda nao tem bloco, cria o primeiro
         if (bucket.offsetPrimeiro == -1) {
             dataOut.seekp(0, ios::end);
             int64_t novoOffset = static_cast<int64_t>(dataOut.tellp());
@@ -55,14 +85,17 @@ void gerarHash(const char *arquivoData) {
             bucket.offsetUltimo = novoOffset;
             bucket.nBlocos = 1;
             bucket.registrosNoBloco = 0;
+            totalBlocos++;
+
+            if (totalArtigos % 100000 == 0)
+                logMsg(DEBUG, "Criado novo bloco inicial no offset " + to_string(novoOffset));
         }
 
-        // Se bloco atual cheio, criar novo bloco de overflow
+        //Se bloco atual esta cheio, cria um novo bloco de overflow
         if (bucket.registrosNoBloco == ARTIGOS_POR_BLOCO) {
             dataOut.seekp(0, ios::end);
             int64_t novoOffset = static_cast<int64_t>(dataOut.tellp());
 
-            // Atualiza header do bloco anterior
             BlocoHeader headerAnt;
             dataOut.seekg(bucket.offsetUltimo, ios::beg);
             dataOut.read(reinterpret_cast<char*>(&headerAnt), sizeof(headerAnt));
@@ -70,7 +103,6 @@ void gerarHash(const char *arquivoData) {
             dataOut.seekp(bucket.offsetUltimo, ios::beg);
             dataOut.write(reinterpret_cast<char*>(&headerAnt), sizeof(headerAnt));
 
-            // Cria novo bloco
             BlocoHeader novoHeader = { -1, 0 };
             dataOut.seekp(novoOffset, ios::beg);
             dataOut.write(reinterpret_cast<char*>(&novoHeader), sizeof(novoHeader));
@@ -80,15 +112,19 @@ void gerarHash(const char *arquivoData) {
             bucket.offsetUltimo = novoOffset;
             bucket.registrosNoBloco = 0;
             bucket.nBlocos++;
+            totalBlocos++;
+
+            if (totalArtigos % 100000 == 0)
+                logMsg(DEBUG, "Bloco cheio, criado overflow no offset " + to_string(novoOffset));
         }
 
-        // Escreve artigo no bloco atual
+        //Escreve o artigo no bloco atual
         int64_t posArtigo = bucket.offsetUltimo + static_cast<int64_t>(sizeof(BlocoHeader))
                             + static_cast<int64_t>(bucket.registrosNoBloco) * static_cast<int64_t>(sizeof(Artigo));
         dataOut.seekp(posArtigo, ios::beg);
         dataOut.write(reinterpret_cast<char*>(&a), sizeof(Artigo));
 
-        // Escreve também no index.bin imediatamente
+        //Escreve no index.bin
         indexOut.write(reinterpret_cast<char*>(&a.id), sizeof(int));
         indexOut.write(reinterpret_cast<char*>(&b), sizeof(int));
         indexOut.write(reinterpret_cast<char*>(&posArtigo), sizeof(int64_t));
@@ -96,7 +132,7 @@ void gerarHash(const char *arquivoData) {
         bucket.registrosNoBloco++;
         bucket.nRegistros++;
 
-        // Atualiza header do bloco atual
+        //Atualiza o header do bloco atual
         BlocoHeader headerAtual;
         dataOut.seekg(bucket.offsetUltimo, ios::beg);
         dataOut.read(reinterpret_cast<char*>(&headerAtual), sizeof(headerAtual));
@@ -109,10 +145,9 @@ void gerarHash(const char *arquivoData) {
     dataOut.close();
     indexOut.close();
 
-    // Cria hash.bin (BucketInfo)
     ofstream hashOut("hash.bin", ios::binary);
     if (!hashOut) {
-        cerr << "Erro ao criar hash.bin\n";
+        logMsg(ERROR, "Erro ao criar hash.bin");
         return;
     }
 
@@ -125,7 +160,16 @@ void gerarHash(const char *arquivoData) {
     }
     hashOut.close();
 
-    cout << "✅ Data hash criado com overflow, " << NUM_BUCKETS
-         << " buckets, " << ARTIGOS_POR_BLOCO << " artigos por bloco.\n";
-    cout << "📄 Arquivos gerados: data_hash.dat, hash.bin, index.bin\n";
+    auto fim = chrono::high_resolution_clock::now();
+    auto duracao = chrono::duration_cast<chrono::milliseconds>(fim - inicio).count();
+
+    logMsg(INFO, "================ FIM DA INDEXAÇÃO ================");
+    logMsg(INFO, "Total de artigos processados: " + to_string(totalArtigos));
+    logMsg(INFO, "Total de blocos criados: " + to_string(totalBlocos));
+    logMsg(INFO, "Tempo total de execução: " + to_string(duracao) + " ms");
+    logMsg(INFO, "Arquivos gerados:");
+    logMsg(INFO, "  • data_hash.dat");
+    logMsg(INFO, "  • hash.bin");
+    logMsg(INFO, "  • index.bin");
+    logMsg(INFO, "==================================================");
 }
