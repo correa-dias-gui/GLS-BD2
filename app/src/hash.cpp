@@ -41,14 +41,14 @@ void gerarHash(const char *arquivoData) {
     }
 
     //Cria ou sobrescreve data_hash.dat
-    fstream dataOut("data_hash.dat", ios::in | ios::out | ios::binary | ios::trunc);
+    fstream dataOut("data/data_hash.dat", ios::in | ios::out | ios::binary | ios::trunc);
     if (!dataOut) {
         logMsg(ERROR, "Erro ao criar data_hash.dat");
         return;
     }
 
     //Cria index.bin
-    ofstream indexOut("index.bin", ios::binary);
+    ofstream indexOut("data/index.bin", ios::binary);
     if (!indexOut) {
         logMsg(ERROR, "Erro ao criar index.bin");
         return;
@@ -145,7 +145,7 @@ void gerarHash(const char *arquivoData) {
     dataOut.close();
     indexOut.close();
 
-    ofstream hashOut("hash.bin", ios::binary);
+    ofstream hashOut("data/hash.bin", ios::binary);
     if (!hashOut) {
         logMsg(ERROR, "Erro ao criar hash.bin");
         return;
