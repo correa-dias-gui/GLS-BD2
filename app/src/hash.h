@@ -13,6 +13,7 @@ extern const int TAM_BLOCO;
 extern const int ARTIGOS_POR_BLOCO;
 extern const int NUM_BUCKETS;
 
+//struct do artigo
 #pragma pack(push, 1)
 struct Artigo {
     int id;
@@ -27,7 +28,7 @@ struct Artigo {
 
 #pragma pack(push, 1)
 struct BlocoHeader {
-    int64_t prox;  //offset do próximo bloco (-1 se não houver)
+    int64_t prox;  //offset do proximo bloco (-1 se não houver)
     int nRegs;     //quantos registros validos neste bloco
 };
 #pragma pack(pop)
