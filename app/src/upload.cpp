@@ -135,20 +135,22 @@ int main(int argc, char* argv[]) {
     auto print_titulo = [](const char* raw, int tam){ return string(raw, strnlen(raw,tam)); };
 
     // Instâncias das árvores
-    ArvoreBMais indice_id("indice_id.bin", 4, cmp_id, serialize_id, deserialize_id, print_id);
-    ArvoreBMais indice_titulo("indice_titulo.bin", TAM_TITULO, cmp_titulo, serialize_titulo, deserialize_titulo, print_titulo);
+    ArvoreBMais indice_id("data/indice_id.bin", 4, cmp_id, serialize_id, deserialize_id, print_id);
+    ArvoreBMais indice_titulo("data/indice_titulo.bin", TAM_TITULO, cmp_titulo, serialize_titulo, deserialize_titulo, print_titulo);
 
     // Abrir hash.bin para obter offsets dos buckets
-    ifstream hashIn("hash.bin", ios::binary);
+    ifstream hashIn("data/hash.bin", ios::binary);
     if (!hashIn){ cerr << "Erro ao abrir hash.bin para indexar" << endl; return 1; }
     vector<BucketInfo> buckets(NUM_BUCKETS);
     for (int i=0;i<NUM_BUCKETS;i++) hashIn.read(reinterpret_cast<char*>(&buckets[i]), sizeof(BucketInfo));
     hashIn.close();
 
     // Abrir data_hash.dat para percorrer blocos
-    fstream dataHash("data_hash.dat", ios::in | ios::out | ios::binary);
+    fstream dataHash("data/data_hash.dat", ios::in | ios::out | ios::binary);
     if (!dataHash){ cerr << "Erro ao abrir data_hash.dat" << endl; return 1; }
 
+
+    cout << "Iniciando construção dos índices B+..." << endl;
     long registrosInseridos = 0;
     for (int b=0;b<NUM_BUCKETS;b++) {
         int64_t blocoOffset = buckets[b].offset;
@@ -158,6 +160,8 @@ int main(int argc, char* argv[]) {
             dataHash.read(reinterpret_cast<char*>(&header), sizeof(header));
             // Ler registros válidos
             for (int r=0; r<header.nRegs; r++) {
+                if (r % 100000 == 0)
+                    cout << "Indexando registros... " << registrosInseridos << " inseridos até agora.\r";
                 int64_t posArtigo = blocoOffset + sizeof(BlocoHeader) + r * sizeof(Artigo);
                 dataHash.seekg(posArtigo, ios::beg);
                 Artigo art; dataHash.read(reinterpret_cast<char*>(&art), sizeof(Artigo));
