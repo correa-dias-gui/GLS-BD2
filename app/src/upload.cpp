@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
     }
     dataHash.close();
     cout << "Índices B+ construídos: " << registrosInseridos << " registros indexados." << endl;
-    indice_id.exibir();
-    indice_titulo.exibir();
+    //indice_id.exibir();
+    //indice_titulo.exibir();
     return 0;
 }

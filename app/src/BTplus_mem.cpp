@@ -166,7 +166,7 @@ long ArvoreBMais::encontrarFolha(long no_offset, const void* chave) {
 
 ArvoreBMais::SplitResult ArvoreBMais::inserirRecursivo(long no_offset, const std::string& chave_ser, long dado_offset) {
     No no = carregarNo(no_offset);
-    fprintf(stderr, "[DEBUG] inserirRecursivo offset=%ld folha=%d qtd=%d chave='%s'\n", no_offset, no.folha, no.qtd_chaves, chave_ser.c_str());
+    debug(string("[DEBUG] inserirRecursivo offset=") + to_string(no_offset) + " folha=" + to_string(no.folha) + " qtd=" + to_string(no.qtd_chaves) + " chave='" + chave_ser + "'");
     if (no.folha) {
         // Inserir em folha
         vector<pair<string,long>> pares;
@@ -176,18 +176,18 @@ ArvoreBMais::SplitResult ArvoreBMais::inserirRecursivo(long no_offset, const std
         }
         pares.emplace_back(chave_ser, dado_offset);
         std::sort(pares.begin(), pares.end(), [&](const auto& A, const auto& B){
-    // A.first e B.first são strings serializadas
-    void* ca = deserialize(A.first);
-    void* cb = deserialize(B.first);
-    int r = compare(ca, cb);
-    delete reinterpret_cast<char*>(ca);
-    delete reinterpret_cast<char*>(cb);
-    return r < 0;
-});
+            void* ca = deserialize(A.first);
+            void* cb = deserialize(B.first);
+            int r = compare(ca, cb);
+            delete reinterpret_cast<char*>(ca);
+            delete reinterpret_cast<char*>(cb);
+            return r < 0;
+        });
         if ((int)pares.size() <= no.max_chaves) {
             for (int i=0;i<(int)pares.size();++i) { no.setChave(i, pares[i].first.c_str()); no.setOffset(i, pares[i].second); }
             no.qtd_chaves = (int)pares.size();
             reescreverNo(no_offset, no);
+            debug(string("[DEBUG] Inserção em folha sem split offset=") + to_string(no_offset) + " total=" + to_string(pares.size()));
             return ArvoreBMais::SplitResult();
         } else {
             // split folha
@@ -200,14 +200,15 @@ ArvoreBMais::SplitResult ArvoreBMais::inserirRecursivo(long no_offset, const std
             long direita_offset = salvarNo(direita);
             no.proximo = direita_offset;
             reescreverNo(no_offset, no);
+            debug(string("[DEBUG] Split folha offset=") + to_string(no_offset) + " meio=" + to_string(meio) + " nova_folha_offset=" + to_string(direita_offset));
             ArvoreBMais::SplitResult res; res.split = true; res.promotedKey = string(direita.getChave(0), metadata.tam_chave); res.rightOffset = direita_offset; return res;
         }
     } else {
         // Nó interno: encontrar filho
     int i=0; while (i<no.qtd_chaves && compare(chave_ser.c_str(), no.getChave(i))>=0) { i++; }
-    fprintf(stderr, "[DEBUG] Descendo para filho index=%d (qtd_chaves=%d)\n", i, no.qtd_chaves);
+    debug(string("[DEBUG] Nó interno descendo index=") + to_string(i) + " offset=" + to_string(no_offset));
         long child = *no.getOffset(i);
-    fprintf(stderr, "[DEBUG] Child offset=%ld\n", child);
+    debug(string("[DEBUG] Child offset=") + to_string(child));
         SplitResult childRes = inserirRecursivo(child, chave_ser, dado_offset);
     if (!childRes.split) return ArvoreBMais::SplitResult();
         // Precisa inserir chave promovida neste nó interno
@@ -224,13 +225,13 @@ ArvoreBMais::SplitResult ArvoreBMais::inserirRecursivo(long no_offset, const std
             for (int k=0;k<no.qtd_chaves;++k){ no.setChave(k, chaves[k].c_str()); no.setOffset(k, filhos[k]); }
             no.setOffset(no.qtd_chaves, filhos[no.qtd_chaves]);
             reescreverNo(no_offset, no);
-            fprintf(stderr, "[DEBUG] Inserido promotedKey '%s' em nó interno offset=%ld sem split; qtd_chaves=%d\n", childRes.promotedKey.c_str(), no_offset, no.qtd_chaves);
+            debug(string("[DEBUG] Inserido promotedKey em interno offset=") + to_string(no_offset) + " qtd_chaves=" + to_string(no.qtd_chaves));
             return ArvoreBMais::SplitResult();
         } else {
             // Split interno
             int meio = chaves.size()/2;
             string chave_promovida = chaves[meio];
-            fprintf(stderr, "[DEBUG] Split interno offset=%ld meio=%d promovida='%s' total_chaves=%zu\n", no_offset, meio, chave_promovida.c_str(), chaves.size());
+            debug(string("[DEBUG] Split interno offset=") + to_string(no_offset) + " meio=" + to_string(meio));
             No direita(false, metadata.M, metadata.tam_chave);
             // direita recebe chaves após meio
             direita.qtd_chaves = (int)chaves.size() - meio - 1;
@@ -308,6 +309,35 @@ long ArvoreBMais::buscar(const void* chave) {
     return -1;
 }
 
+No ArvoreBMais::buscarNo(const void* chave) {
+    No vazio(true, metadata.M, metadata.tam_chave); // retornado se não encontrar
+    if (metadata.raiz_offset == -1) return vazio;
+    string chave_ser = serialize(chave);
+    long atual = metadata.raiz_offset;
+    while (atual != -1) {
+        No no = carregarNo(atual);
+        // Procura chave neste nó
+        for (int i = 0; i < no.qtd_chaves; ++i) {
+            if (compare(chave_ser.c_str(), no.getChave(i)) == 0) {
+                return no; // nó encontrado (folha ou interno)
+            }
+            if (!no.folha && compare(chave_ser.c_str(), no.getChave(i)) < 0) {
+                long prox = *no.getOffset(i);
+                atual = prox;
+                goto next_iter; // descer
+            }
+        }
+        if (!no.folha) {
+            atual = *no.getOffset(no.qtd_chaves);
+        } else {
+            // folha: tentar seguir lista encadeada só se duplicatas possíveis
+            atual = no.proximo;
+        }
+        next_iter:;
+    }
+    return vazio;
+}
+
 void ArvoreBMais::exibir() {
     cout << "=== Conteúdo da árvore (" << nome_arquivo << ") ===" << endl;
     cout << "Altura: " << metadata.altura << " | Itens: " << metadata.qtd_itens << " | tam_chave: " << metadata.tam_chave << " | M: " << metadata.M << endl;
@@ -342,4 +372,11 @@ void ArvoreBMais::exibirNo(long offset, int nivel) {
             exibirNo(*no.getOffset(i), nivel + 1);
     }
     cout << indent << "-----------------------------\n";
+}
+
+void ArvoreBMais::debug(const string& msg) {
+    if (!debug_ativo) return;
+    const string path = log_debug_arquivo.empty() ? (nome_arquivo + ".debug.txt") : log_debug_arquivo;
+    ofstream out(path, ios::app); // texto
+    out << msg << '\n';
 }

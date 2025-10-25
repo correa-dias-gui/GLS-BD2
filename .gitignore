@@ -1,3 +1,7 @@
 # nem tenta subir o arquivo artigo.csv
-app/data/artigo.csv
+app/data/
 .vscode/
+*.dat
+*.bin
+*.log
+*.bin.log
