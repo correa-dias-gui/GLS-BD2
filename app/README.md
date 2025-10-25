@@ -5,7 +5,7 @@ Repositório da equipe para o Trabalho Prático 2.
 
 ---
 
-## 📁 Estrutura do projeto
+##  Estrutura do projeto
 
 ```
 app/
@@ -23,7 +23,7 @@ app/
 
 ---
 
-## 🔨 Como compilar localmente
+##  Como compilar localmente
 
 1. **Navegue até a pasta do projeto:**
    ```bash
@@ -43,9 +43,9 @@ app/
 
 > **Nota:** Se ainda não houver arquivos `.cpp`, o Makefile funciona como skeleton e não gera binários.
 
-## 🚀 Como executar os programas
+##  Como executar os programas
 
-### 📋 Programas disponíveis
+###  Programas disponíveis
 
 **`upload`** – Cria os arquivos de dados e índices a partir do CSV de entrada:
 ```bash
@@ -67,15 +67,15 @@ app/
 ./bin/seek2 "Um Título Exato"
 ```
 
-### 📊 Saída dos programas
+###  Saída dos programas
 Todos os programas imprimem:
 - Todos os campos do registro encontrado
 - Quantidade de blocos lidos
 - Total de blocos do arquivo de dados ou índice
 
-## 🐳 Testando com Makefile e Docker
+##  Testando com Makefile e Docker
 
-### 🔧 Comandos locais (Makefile)
+###  Comandos locais (Makefile)
 ```bash
 # Build local
 make build
@@ -84,7 +84,7 @@ make build
 make clean
 ```
 
-### 🐋 Comandos Docker
+###  Comandos Docker
 ```bash
 # Build da imagem Docker
 make docker-build
@@ -106,14 +106,14 @@ make docker-run-seek2
 
 ---
 
-## 📝 Requisitos
+##  Requisitos
 
 - **C++11** ou superior
 - **Make** para automação de build
 - **Docker** (opcional, para execução containerizada)
 
-## 👥 Equipe
- - Guilherme Dias Correa - 
+##  Equipe
+- Guilherme Dias Correa - 
 - Luiza da Costa Caxeixa - 22354553
 - Sofia de Castro Sato  - 
 

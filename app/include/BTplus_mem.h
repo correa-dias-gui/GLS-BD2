@@ -59,6 +59,8 @@ private:
 
     fstream arquivo;
     string nome_arquivo;
+    string log_debug_arquivo; // novo: arquivo de log
+    bool debug_ativo = true;  // controla escrita de debug
 
     CompareFunc compare;
     SerializeFunc serialize;
@@ -84,6 +86,7 @@ private:
     void registrarBusca(const string& chave, int blocos_lidos);
 
     SplitResult inserirRecursivo(long no_offset, const std::string& chave_ser, long dado_offset); // nova função
+    void debug(const string& msg); // novo método
 
 public:
     ArvoreBMais(string nome, int tam_chave, CompareFunc cmp, SerializeFunc ser, DeserializeFunc deser, PrintKeyFunc pkey);
@@ -91,7 +94,10 @@ public:
 
     void inserir(const void* chave, long offset_dado);
     long buscar(const void* chave);
+    No buscarNo(const void* chave); // novo método
     void exibir();
+    void setDebug(bool ativo) { debug_ativo = ativo; }
+    void setLogArquivo(const string& path) { log_debug_arquivo = path; }
 };
 
 #endif
