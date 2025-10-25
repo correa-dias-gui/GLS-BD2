@@ -51,10 +51,9 @@ int main(int argc, char* argv[]) {
 
     int idBuscado = stoi(argv[1]);
 
-    // Diretório base definido pela variável de ambiente (ou "data" por padrão)
-    string baseDir = getenv("DATA_DIR") ? getenv("DATA_DIR") : "data";
-    string indiceFile = baseDir + "/indice_int.bin";
-    string dataFile   = baseDir + "/data_hash.dat";
+    // ✅ CAMINHOS CORRIGIDOS - baseado na estrutura real dos arquivos
+    string indiceFile = "indice_id.bin";    // índice principal na raiz (15M)
+    string dataFile = "data_hash.dat";      // dados na raiz (2.0G)
 
     logMsg(INFO, "================ BUSCA COM ÍNDICE PRIMÁRIO ================");
     logMsg(INFO, "ID buscado: " + to_string(idBuscado));
