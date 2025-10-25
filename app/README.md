@@ -23,7 +23,7 @@ app/
 
 ---
 
-## 🔨 Como compilar localmente
+##  Como compilar localmente
 
 1. **Navegue até a pasta do projeto:**
    ```bash
