@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    FILE *dataBin = fopen("data.bin", "wb");
+    FILE *dataBin = fopen("data/data.bin", "wb");
     if (!dataBin) {
         cerr << "Erro ao criar data.bin\n";
         return 1;
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
     cout << "\nUpload concluído e arquivo gerado: data.bin (" << sizeof(Artigo) << " bytes por registro)\n\n";
 
     //Chama o hash para gerar arquivos de buckets
-    gerarHash("data.bin");
+    gerarHash("data/data.bin");
 
     // ==== Construção dos índices B+ (id e titulo) ====
     // Callbacks para ID (int) big-endian
