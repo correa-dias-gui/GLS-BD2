@@ -51,9 +51,8 @@ int main(int argc, char* argv[]) {
 
     int idBuscado = stoi(argv[1]);
 
-    // ✅ CAMINHOS CORRIGIDOS - baseado na estrutura real dos arquivos
-    string indiceFile = "data/indice_id.bin";    // índice principal na raiz (15M)
-    string dataFile = "data/data_hash.dat";      // dados na raiz (2.0G)
+    string indiceFile = "data/indice_id.bin";
+    string dataFile = "data/data_hash.dat";      
 
     logMsg(INFO, "================ BUSCA COM ÍNDICE PRIMÁRIO ================");
     logMsg(INFO, "ID buscado: " + to_string(idBuscado));
@@ -112,10 +111,9 @@ int main(int argc, char* argv[]) {
         logMsg(DEBUG, "Árvore B+ carregada com sucesso");
 
         // Busca o ID no índice B+
-        long offsetRegistro = indice_id.buscar(&idBuscado);
+        int blocosLidosIndice = 0;
+        long offsetRegistro = indice_id.buscarComContador(&idBuscado, blocosLidosIndice);
 
-        // Simula contador de blocos lidos (ajustar futuramente conforme B+ Tree real)
-        int blocosLidosIndice = 1;
 
         if (offsetRegistro == -1) {
             logMsg(WARN, "ID não encontrado no índice");

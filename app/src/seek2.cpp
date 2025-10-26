@@ -22,37 +22,16 @@ struct Artigo {
 };
 #pragma pack(pop)
 
-// -------------------- Função para buscar todos os offsets com o mesmo título --------------------
-vector<long> buscarTodosOffsets(ArvoreBMais& indice, const string& tituloBuscado) {
-    vector<long> offsets;
+// -------------------- Função para buscar todos os offsets com contador --------------------
+vector<long> buscarTodosOffsetsComContador(ArvoreBMais& indice, const string& tituloBuscado, int &blocosLidos) {
+    blocosLidos = 0;
 
-    try {
-        char tituloBuffer[301];
-        memset(tituloBuffer, 0, 301);
-        strncpy(tituloBuffer, tituloBuscado.c_str(), 300);
+    char tituloBuffer[301];
+    memset(tituloBuffer, 0, 301);
+    strncpy(tituloBuffer, tituloBuscado.c_str(), 300);
 
-        No no = indice.buscarNo(tituloBuffer);
-
-        if (no.qtd_chaves == 0)
-            return offsets;
-
-        for (int i = 0; i < no.qtd_chaves; i++) {
-            string chaveAtual = string(no.getChave(i), 300);
-            size_t pos = chaveAtual.find('\0');
-            if (pos != string::npos)
-                chaveAtual = chaveAtual.substr(0, pos);
-
-            if (chaveAtual == tituloBuscado) {
-                long offset = *no.getOffset(i);
-                offsets.push_back(offset);
-            }
-        }
-
-    } catch (const exception& e) {
-        cerr << "[ERRO] Falha ao buscar offsets: " << e.what() << endl;
-    }
-
-    return offsets;
+    // usa a função da árvore que retorna todos os offsets e contabiliza blocos
+    return indice.buscarTodosComContador(tituloBuffer, blocosLidos);
 }
 
 // -------------------- Programa Principal --------------------
@@ -107,7 +86,8 @@ int main(int argc, char* argv[]) {
 
         ArvoreBMais indice_titulo(indiceFile, 300, cmp_str, serialize_str, deserialize_str, print_str);
 
-        vector<long> offsets = buscarTodosOffsets(indice_titulo, tituloBuscado);
+        int blocosLidos = 0;
+        vector<long> offsets = buscarTodosOffsetsComContador(indice_titulo, tituloBuscado, blocosLidos);
 
         // Remove duplicatas de offsets
         sort(offsets.begin(), offsets.end());
@@ -161,6 +141,7 @@ int main(int argc, char* argv[]) {
         cout << "\n===== ESTATÍSTICAS =====" << endl;
         cout << "Total de artigos encontrados: " << offsets.size() << endl;
         cout << "Total de blocos no arquivo de dados: " << totalBlocosArquivo << endl;
+        cout << "Blocos lidos na busca: " << blocosLidos << endl;
         cout << "Tempo total de execução: " << duracao << " ms" << endl;
 
     } catch (const exception& e) {

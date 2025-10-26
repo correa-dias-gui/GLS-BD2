@@ -309,6 +309,44 @@ long ArvoreBMais::buscar(const void* chave) {
     return -1;
 }
 
+long ArvoreBMais::buscarComContador(const void* chave, int &blocosLidos) {
+    blocosLidos = 0;               // inicializa contador
+    if (metadata.raiz_offset == -1) {
+        registrarBusca(serialize(chave), 0);
+        return -1;
+    }
+    string chave_ser = serialize(chave);
+    long atual = metadata.raiz_offset;
+
+    while (atual != -1) {
+        No no = carregarNo(atual);
+        ++blocosLidos;  // conta o bloco que acabou de ler
+
+        for (int i = 0; i < no.qtd_chaves; ++i) {
+            if (compare(chave_ser.c_str(), no.getChave(i)) == 0) {
+                registrarBusca(chave_ser, blocosLidos);
+                return *no.getOffset(i);
+            }
+            if (!no.folha && compare(chave_ser.c_str(), no.getChave(i)) < 0) {
+                atual = *no.getOffset(i);
+                goto next_loop;
+            }
+        }
+
+        if (!no.folha) {
+            atual = *no.getOffset(no.qtd_chaves);
+        } else {
+            atual = no.proximo;
+        }
+
+    next_loop:;
+    }
+
+    registrarBusca(chave_ser, blocosLidos);
+    return -1;
+}
+
+
 No ArvoreBMais::buscarNo(const void* chave) {
     No vazio(true, metadata.M, metadata.tam_chave); // retornado se não encontrar
     if (metadata.raiz_offset == -1) return vazio;
@@ -336,6 +374,65 @@ No ArvoreBMais::buscarNo(const void* chave) {
         next_iter:;
     }
     return vazio;
+}
+
+vector<long> ArvoreBMais::buscarTodosComContador(const void* chave, int &blocosLidos) {
+    vector<long> offsets;
+    blocosLidos = 0;  // inicializa contador
+
+    if (metadata.raiz_offset == -1) {
+        registrarBusca(serialize(chave), 0);
+        return offsets;
+    }
+
+    string chave_ser = serialize(chave);
+    long atual = metadata.raiz_offset;
+
+    // Desce na árvore até achar a folha correta
+    while (atual != -1) {
+        No no = carregarNo(atual);
+        ++blocosLidos;
+
+        if (no.folha) {
+            // Estamos na folha, percorre chaves para encontrar duplicatas
+            bool encontrou = false;
+            while (true) {
+                for (int i = 0; i < no.qtd_chaves; ++i) {
+                    int cmp = compare(chave_ser.c_str(), no.getChave(i));
+                    if (cmp == 0) {
+                        offsets.push_back(*no.getOffset(i));
+                        encontrou = true;
+                    } else if (cmp < 0 && encontrou) {
+                        // Chegou a chaves maiores, já encontrou todos os duplicados
+                        registrarBusca(chave_ser, blocosLidos);
+                        return offsets;
+                    }
+                }
+
+                if (no.proximo == -1) break;
+                no = carregarNo(no.proximo);
+                ++blocosLidos;
+            }
+            break; // terminou a busca na folha
+        } else {
+            // Nó interno: decide qual filho descer
+            bool desceu = false;
+            for (int i = 0; i < no.qtd_chaves; ++i) {
+                if (compare(chave_ser.c_str(), no.getChave(i)) < 0) {
+                    atual = *no.getOffset(i);
+                    desceu = true;
+                    break;
+                }
+            }
+            if (!desceu) {
+                // Chave maior que todas, desce para o último ponteiro
+                atual = *no.getOffset(no.qtd_chaves);
+            }
+        }
+    }
+
+    registrarBusca(chave_ser, blocosLidos);
+    return offsets;
 }
 
 void ArvoreBMais::exibir() {

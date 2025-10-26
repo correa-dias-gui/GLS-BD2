@@ -94,7 +94,9 @@ public:
 
     void inserir(const void* chave, long offset_dado);
     long buscar(const void* chave);
+    long buscarComContador(const void* chave, int &blocosLidos);
     No buscarNo(const void* chave); // novo método
+    vector<long> buscarTodosComContador(const void* chave, int &blocosLidos);
     void exibir();
     void setDebug(bool ativo) { debug_ativo = ativo; }
     void setLogArquivo(const string& path) { log_debug_arquivo = path; }
