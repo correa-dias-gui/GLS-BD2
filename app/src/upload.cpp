@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
-#include "hash.h"
+#include "../include/hash.h"
 #include "../include/BTplus_mem.h"
 
 using namespace std;

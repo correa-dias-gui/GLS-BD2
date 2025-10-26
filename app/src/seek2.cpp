@@ -63,8 +63,8 @@ int main(int argc, char* argv[]) {
     }
 
     string tituloBuscado = argv[1];
-    string indiceFile = "indice_titulo.bin";
-    string dataFile = "data_hash.dat";
+    string indiceFile = "data/indice_titulo.bin";
+    string dataFile = "data/data_hash.dat";
 
     cout << "===== BUSCA COM ÍNDICE SECUNDÁRIO =====" << endl;
     cout << "Título buscado: " << tituloBuscado << endl;

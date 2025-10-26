@@ -7,7 +7,7 @@ BIN_DIR = bin
 INCLUDE_DIR = include
 
 # Arquivos que têm função main() e devem virar executáveis
-MAIN_SOURCES = findrec.cpp main.cpp arvore.cpp parser.cpp upload.cpp seek1.cpp seek2.cpp
+MAIN_SOURCES = findrec.cpp upload.cpp seek1.cpp seek2.cpp
 EXECUTABLES = $(patsubst %.cpp,$(BIN_DIR)/%,$(MAIN_SOURCES))
 
 # Biblioteca (sem main)
@@ -26,14 +26,14 @@ $(BIN_DIR):
 $(BIN_DIR)/findrec: $(SRC_DIR)/findrec.cpp
 	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $< -o $@
 
-$(BIN_DIR)/main: $(SRC_DIR)/main.cpp $(SRC_DIR)/BTplus_mem.cpp
-	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $^ -o $@
+# $(BIN_DIR)/main: $(SRC_DIR)/main.cpp $(SRC_DIR)/BTplus_mem.cpp
+# 	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $^ -o $@
 
-$(BIN_DIR)/arvore: $(SRC_DIR)/arvore.cpp
-	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $< -o $@
+# $(BIN_DIR)/arvore: $(SRC_DIR)/arvore.cpp
+# 	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $< -o $@
 
-$(BIN_DIR)/parser: $(SRC_DIR)/parser.cpp
-	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $< -o $@
+# $(BIN_DIR)/parser: $(SRC_DIR)/parser.cpp
+# 	$(CXX) $(CXXFLAGS) -I $(INCLUDE_DIR) $< -o $@
 
 # Programas principais do TP2 (quando implementados)
 $(BIN_DIR)/upload: $(SRC_DIR)/upload.cpp $(SRC_DIR)/BTplus_mem.cpp $(SRC_DIR)/hash.cpp

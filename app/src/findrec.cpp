@@ -62,8 +62,8 @@ int main(int argc, char* argv[]) {
     }
 
     int idBuscado = stoi(argv[1]);
-    string hashPath = "hash.bin";
-    string dataPath = "data_hash.dat";
+    string hashPath = "../data/hash.bin";
+    string dataPath = "../data/data_hash.dat";
 
     logMsg(INFO, "================ INÍCIO DA BUSCA ================");
     logMsg(INFO, "ID buscado: " + to_string(idBuscado));

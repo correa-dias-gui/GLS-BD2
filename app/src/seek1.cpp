@@ -52,8 +52,8 @@ int main(int argc, char* argv[]) {
     int idBuscado = stoi(argv[1]);
 
     // ✅ CAMINHOS CORRIGIDOS - baseado na estrutura real dos arquivos
-    string indiceFile = "indice_id.bin";    // índice principal na raiz (15M)
-    string dataFile = "data_hash.dat";      // dados na raiz (2.0G)
+    string indiceFile = "data/indice_id.bin";    // índice principal na raiz (15M)
+    string dataFile = "data/data_hash.dat";      // dados na raiz (2.0G)
 
     logMsg(INFO, "================ BUSCA COM ÍNDICE PRIMÁRIO ================");
     logMsg(INFO, "ID buscado: " + to_string(idBuscado));
