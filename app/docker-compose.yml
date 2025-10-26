@@ -5,12 +5,12 @@ services:
     build: .
     container_name: tp2-upload
     volumes:
-      - ./data:/app/data         # monta a pasta local ./data dentro do container
+      - ./data:/app/data         
     environment:
       - LOG_LEVEL=info
       - DATA_DIR=/app/data
-      - CSV_PATH=/app/data/input.csv
-    command: ["./bin/upload", "/app/data/input.csv"]
+      - CSV_PATH=/app/data/artigo.csv
+    command: ["./bin/upload", "/app/data/artigo.csv"]
 
   findrec:
     build: .
@@ -20,7 +20,7 @@ services:
     environment:
       - LOG_LEVEL=info
       - DATA_DIR=/app/data
-    command: ["./bin/findrec", "123"]    # exemplo de ID, pode trocar depois
+    command: ["./bin/findrec", "123"]   
 
   seek1:
     build: .
@@ -40,4 +40,4 @@ services:
     environment:
       - LOG_LEVEL=info
       - DATA_DIR=/app/data
-    command: ["./bin/seek2", "Um Título Exato"]
+    command: ["./bin/seek2", "Spatially-multiplexed MIMO markers."]
