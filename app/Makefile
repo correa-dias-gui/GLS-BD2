@@ -54,7 +54,7 @@ docker-build:
 	docker build -t tp2 .
 
 docker-run-upload:
-	docker run --rm -v "$(PWD)/data:/data" tp2 ./bin/upload /data/input.csv
+	docker run --rm -v "$(PWD)/data:/data" tp2 ./bin/upload /data/artigo.csv
 
 docker-run-findrec:
 	docker run --rm -v "$(PWD)/data:/data" tp2 ./bin/findrec 123
@@ -63,4 +63,4 @@ docker-run-seek1:
 	docker run --rm -v "$(PWD)/data:/data" tp2 ./bin/seek1 123
 
 docker-run-seek2:
-	docker run --rm -v "$(PWD)/data:/data" tp2 ./bin/seek2 "Um Título"
+	docker run --rm -v "$(PWD)/data:/data" tp2 ./bin/seek2 "Spatially-multiplexed MIMO markers."
