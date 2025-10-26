@@ -6,7 +6,7 @@
 using namespace std;
 
 const int TAM_BLOCO = 4096;
-const int ARTIGOS_POR_BLOCO = 2;
+//const int ARTIGOS_POR_BLOCO = 2;
 const int NUM_BUCKETS = 2000;
 
 enum LogLevel { ERROR = 0, WARN = 1, INFO = 2, DEBUG = 3 };
@@ -62,8 +62,8 @@ int main(int argc, char* argv[]) {
     }
 
     int idBuscado = stoi(argv[1]);
-    string hashPath = "../data/hash.bin";
-    string dataPath = "../data/data_hash.dat";
+    string hashPath = "data/hash.bin";
+    string dataPath = "data/data_hash.dat";
 
     logMsg(INFO, "================ INÍCIO DA BUSCA ================");
     logMsg(INFO, "ID buscado: " + to_string(idBuscado));
