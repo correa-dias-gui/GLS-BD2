@@ -38,7 +38,7 @@ app/
 
 3. **Exemplo de execução de teste:**
    ```bash
-   ./bin/main   # caso tenha um arquivo main.cpp de teste
+   ./bin/findrec   # nesse caso ainda falta o ID
    ```
 
 > **Nota:** Se ainda não houver arquivos `.cpp`, o Makefile funciona como skeleton e não gera binários.
@@ -49,7 +49,7 @@ app/
 
 **`upload`** – Cria os arquivos de dados e índices a partir do CSV de entrada:
 ```bash
-./bin/upload /caminho/para/input.csv
+./bin/upload /data/artigo.csv
 ```
 
 **`findrec`** – Busca um registro diretamente pelo ID no arquivo de dados:
@@ -64,14 +64,15 @@ app/
 
 **`seek2`** – Busca pelo Título usando o índice secundário:
 ```bash
-./bin/seek2 "Um Título Exato"
+./bin/seek2 "Spatially-multiplexed MIMO markers."
 ```
 
 ###  Saída dos programas
 Todos os programas imprimem:
-- Todos os campos do registro encontrado
-- Quantidade de blocos lidos
-- Total de blocos do arquivo de dados ou índice
+- Total de registros encontrados;
+- Total de blocos no arquivo de dados;
+- Quantidade de blocos lidos na operação;
+- Tempo total de execução em milissegundos.
 
 ##  Testando com Makefile e Docker
 
@@ -80,7 +81,7 @@ Todos os programas imprimem:
 # Build local
 make build
 
-# Limpar binários
+# Limpar binários - caso já existam
 make clean
 ```
 
@@ -113,9 +114,9 @@ make docker-run-seek2
 - **Docker** (opcional, para execução containerizada)
 
 ##  Equipe
-- Guilherme Dias Correa - 
+- Guilherme Dias Corrêa - 22352926
 - Luiza da Costa Caxeixa - 22354553
-- Sofia de Castro Sato  - 
+- Sofia de Castro Sato  - 22354600
 
 
 Trabalho Prático 2 - Banco de Dados I  
