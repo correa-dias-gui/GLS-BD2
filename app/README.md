@@ -9,15 +9,15 @@ Repositório da equipe para o Trabalho Prático 2.
 
 ```
 app/
-├── src/                    # Código-fonte (.cpp)
-├── include/                # Cabeçalhos (.h)
-├── bin/                    # Executáveis gerados
-├── data/                   # Arquivos de dados e índices
-├── tests/                  # Scripts ou dados de teste
-├── Dockerfile              # Configuração Docker
-├── docker-compose.yml      # Orquestração Docker
-├── Makefile               # Automação de build
-├── README.md              # Este arquivo
+├── src/                      # Código-fonte (.cpp)
+├── include/                  # Cabeçalhos (.h)
+├── bin/                      # Executáveis gerados
+├── data/                     # Arquivos de dados e índices
+├── tests/                    # Scripts ou dados de teste
+├── Dockerfile                # Configuração Docker
+├── docker-compose.yml        # Orquestração Docker
+├── Makefile                  # Automação de build
+├── README.md                 # Este arquivo
 └── TP2-BD1-2025-02.docx.pdf  # Especificação do trabalho
 ```
 
