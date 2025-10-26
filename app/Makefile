@@ -11,7 +11,7 @@ MAIN_SOURCES = findrec.cpp upload.cpp seek1.cpp seek2.cpp
 EXECUTABLES = $(patsubst %.cpp,$(BIN_DIR)/%,$(MAIN_SOURCES))
 
 # Biblioteca (sem main)
-LIB_SOURCES = BTplus_mem.cpp
+LIB_SOURCES = BTplus_mem.cpp hash.cpp
 
 .PHONY: build clean docker-build
 
