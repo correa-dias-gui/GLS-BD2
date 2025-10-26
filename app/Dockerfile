@@ -17,7 +17,7 @@ COPY . .
 # Definir variáveis de ambiente padrão
 ENV DATA_DIR=/app/data \
     LOG_LEVEL=info \
-    CSV_PATH=/app/data/input.csv
+    CSV_PATH=/app/data/artigo.csv
 
 # Compilar o projeto (gera binários em /app/bin)
 RUN make build
